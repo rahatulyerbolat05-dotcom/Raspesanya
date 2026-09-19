@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A84FF">
+<meta name="description" content="Живое расписание группы 25-ПРО-1">
+<title>25-ПРО-1 Расписание</title>
+<style>
+  :root{
+    --bg:#F2F2F7;
+    --card:rgba(255,255,255,0.78);
+    --card-solid:#FFFFFF;
+    --text:#1C1C1E;
+    --text2:#6E6E73;
+    --text3:#AEAEB2;
+    --accent:#0A84FF;
+    --warn:#FF9F0A;
+    --danger:#FF3B30;
+    --ok:#30D158;
+    --sep:rgba(60,60,67,0.13);
+    --shadow:0 10px 30px rgba(31,38,71,0.08), 0 1px 2px rgba(31,38,71,0.06);
+    --blur:saturate(180%) blur(20px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#000000;
+      --card:rgba(28,28,30,0.78);
+      --card-solid:#1C1C1E;
+      --text:#F2F2F7;
+      --text2:#98989D;
+      --text3:#636366;
+      --sep:rgba(84,84,88,0.5);
+      --shadow:0 10px 30px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#000000;
+    --card:rgba(28,28,30,0.78);
+    --card-solid:#1C1C1E;
+    --text:#F2F2F7;
+    --text2:#98989D;
+    --text3:#636366;
+    --sep:rgba(84,84,88,0.5);
+    --shadow:0 10px 30px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  [hidden]{display:none !important;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    margin:0;
+    padding-inline:16px;
+    padding-block:20px 48px;
+    display:flex;
+    justify-content:center;
+  }
+  .app{width:100%; max-width:520px; display:flex; flex-direction:column; gap:16px;}
+
+  .topbar{display:flex; align-items:center; gap:12px;}
+  .glyph{
+    width:46px; height:46px; border-radius:13px; flex:none;
+    background:linear-gradient(160deg,#0A84FF,#5E5CE6);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:700; font-size:15px; letter-spacing:-0.02em;
+    box-shadow:0 4px 14px rgba(10,132,255,0.35);
+  }
+  .titleblock{flex:1; min-width:0;}
+  .titleblock h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-0.01em;}
+  .titleblock p{margin:1px 0 0; font-size:13px; color:var(--text2);}
+  .clock{text-align:right; flex:none;}
+  .clock .time{font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-0.02em;}
+  .clock .date{font-size:12px; color:var(--text2);}
+
+  .weekbar{display:flex; align-items:center; gap:8px;}
+  .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 12px; border-radius:100px;
+    font-size:13px; font-weight:600;
+    background:var(--card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border:1px solid var(--sep);
+  }
+  .pill.num{color:#5E5CE6;}
+  .pill.num .dot{background:#5E5CE6;}
+  .pill.denom{color:#FF375F;}
+  .pill.denom .dot{background:#FF375F;}
+  .dot{width:7px; height:7px; border-radius:50%;}
+  .weekbar .segwrap{margin-left:auto;}
+
+  .seg{display:flex; background:rgba(118,118,128,0.12); border-radius:9px; padding:2px; gap:2px;}
+  .seg button{
+    appearance:none; border:none; background:transparent; color:var(--text);
+    font:inherit; font-size:12.5px; font-weight:600; padding:5px 10px; border-radius:7px;
+    cursor:pointer;
+  }
+  .seg button.active{background:var(--card-solid); box-shadow:0 1px 3px rgba(0,0,0,0.15);}
+
+  .hero{
+    background:var(--card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border:1px solid var(--sep); border-radius:22px; padding:18px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .hero.event{background:linear-gradient(160deg,#FF9F0A,#FF375F); border:none;}
+  .hero.event .herorow .label, .hero.event .herorow .status, .hero.event .subject, .hero.event .meta, .hero.event .metaitem{color:#fff !important; opacity:1 !important;}
+  .herorow{display:flex; align-items:center; justify-content:space-between;}
+  .herorow .label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text2);}
+  .herorow .status{font-size:12px; font-weight:700; padding:3px 9px; border-radius:100px;}
+  .status.live{background:rgba(48,209,88,0.15); color:#30D158;}
+  .status.soon{background:rgba(255,159,10,0.15); color:#FF9F0A;}
+  .status.off{background:rgba(142,142,147,0.15); color:var(--text2);}
+  .hero .subject{font-size:21px; font-weight:700; letter-spacing:-0.01em; line-height:1.25;}
+  .hero .meta{display:flex; flex-wrap:wrap; gap:14px; font-size:14px; color:var(--text2);}
+  .metaitem{display:flex; align-items:center; gap:6px;}
+  .hero .countdown{font-size:13px; color:var(--text2);}
+  .hero .countdown b{color:var(--text); font-variant-numeric:tabular-nums;}
+  .hero.event .countdown, .hero.event .countdown b{color:#fff;}
+
+  .daytabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
+  .daytabs::-webkit-scrollbar{display:none;}
+  .daytabs button{
+    flex:1; min-width:44px; appearance:none; border:1px solid var(--sep); background:var(--card);
+    backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    color:var(--text); font:inherit; font-weight:600; font-size:13px;
+    padding:10px 0; border-radius:14px; cursor:pointer; text-align:center;
+  }
+  .daytabs button .n{display:block; font-size:15px; font-weight:700; margin-top:2px;}
+  .daytabs button.today{border-color:var(--accent);}
+  .daytabs button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .daytabs button.active .n{color:#fff;}
+
+  .card{
+    background:var(--card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border:1px solid var(--sep); border-radius:20px; overflow:hidden; box-shadow:var(--shadow);
+  }
+  .daynote{padding:12px 16px; font-size:13px; color:var(--warn); background:rgba(255,159,10,0.1); border-bottom:1px solid var(--sep); display:flex; gap:8px; align-items:flex-start;}
+  .row{display:flex; gap:12px; padding:13px 16px; border-bottom:1px solid var(--sep); align-items:flex-start;}
+  .row:last-child{border-bottom:none;}
+  .row.active{background:rgba(10,132,255,0.08);}
+  .row .time{width:64px; flex:none; font-size:12.5px; color:var(--text2); font-variant-numeric:tabular-nums; line-height:1.5; padding-top:1px;}
+  .row .time b{display:block; font-size:13px; color:var(--text); font-weight:600;}
+  .stripe{width:4px; align-self:stretch; border-radius:3px; flex:none;}
+  .row .body{flex:1; min-width:0;}
+  .row .subj{font-size:14.5px; font-weight:600; line-height:1.3;}
+  .row .sub{font-size:12.5px; color:var(--text2); margin-top:3px; display:flex; flex-wrap:wrap; gap:8px 10px;}
+  .row .splitTag{font-size:10.5px; font-weight:700; color:#5E5CE6; background:rgba(94,92,230,0.12); border-radius:6px; padding:1px 6px; margin-left:6px;}
+  .empty{padding:28px 16px; text-align:center; color:var(--text3); font-size:14px;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px 16px; padding:2px 4px; font-size:12px; color:var(--text2);}
+  .legend .li{display:flex; align-items:center; gap:6px;}
+  .legend .sw{width:8px; height:8px; border-radius:50%;}
+
+  .foot{text-align:center; font-size:11.5px; color:var(--text3); line-height:1.6; padding:4px 8px 0;}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="glyph">25</div>
+    <div class="titleblock">
+      <h1>25-ПРО-1</h1>
+      <p>Колледж им. Кумаша Нургалиева</p>
+    </div>
+    <div class="clock">
+      <div class="time" id="clockTime">--:--</div>
+      <div class="date" id="clockDate">—</div>
+    </div>
+  </div>
+
+  <div class="weekbar">
+    <span class="pill" id="weekPill"><span class="dot"></span><span id="weekPillText">—</span></span>
+    <span class="segwrap">
+      <span class="seg" id="weekSeg">
+        <button data-w="auto" class="active">Авто</button>
+        <button data-w="denom">Знам.</button>
+        <button data-w="num">Числ.</button>
+      </span>
+    </span>
+  </div>
+
+  <div class="hero" id="hero">
+    <div class="herorow">
+      <span class="label" id="heroLabel">Сейчас</span>
+      <span class="status live" id="heroStatus">—</span>
+    </div>
+    <div class="subject" id="heroSubject">Загрузка…</div>
+    <div class="meta" id="heroMeta"></div>
+    <div class="countdown" id="heroCountdown"></div>
+  </div>
+
+  <div class="daytabs" id="dayTabs"></div>
+
+  <div class="card">
+    <div class="daynote" id="dayNote" hidden></div>
+    <div id="dayList"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="foot">
+    Данные — по подтверждённым фото расписания группы. Пары с меткой «завис. от недели» ещё уточняются.<br>
+    Расписание редактируется в одном файле — schedule-data.js.
+  </div>
+</div>
+
+<script src="schedule-data.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var COLORS = {
+    "РО 1.1":"#FF9F0A", "РО 1.2":"#5E5CE6", "РО 1.3":"#0A84FF", "РО 1.4":"#FF375F",
+    "РО 1.5":"#64D2FF", "РО 1.6":"#30D158", "ООМ 1":"#66D4CF", "ООМ 2":"#BF5AF2",
+    "Факультатив":"#FFD60A", "Событие":"#FF3B30"
+  };
+  function colorFor(code){
+    for (var k in COLORS){ if (code.indexOf(k) === 0) return COLORS[k]; }
+    return "#8E8E93";
+  }
+
+  var DAY_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб"];
+
+  var PAIRS = [
+    {n:1, start:"08:00", end:"09:20"},
+    {n:2, start:"09:30", end:"10:50"},
+    {n:3, start:"11:10", end:"12:30"},
+    {n:4, start:"12:50", end:"14:10"},
+    {n:5, start:"14:20", end:"15:40"},
+    {n:6, start:"15:50", end:"17:10"}
+  ];
+  var SAT_PAIRS = [
+    {n:1, start:"08:00", end:"08:35"},{n:2, start:"08:40", end:"09:15"},
+    {n:3, start:"09:20", end:"09:55"},{n:4, start:"10:00", end:"10:35"},
+    {n:5, start:"10:40", end:"11:15"},{n:6, start:"11:20", end:"11:55"},
+    {n:7, start:"12:00", end:"12:35"},{n:8, start:"12:40", end:"13:15"},
+    {n:9, start:"13:20", end:"13:55"},{n:10,start:"14:00", end:"14:35"}
+  ];
+
+  function pad(n){ return n<10 ? "0"+n : ""+n; }
+  function toMinutes(hhmm){ var p=hhmm.split(":"); return (+p[0])*60 + (+p[1]); }
+  function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+
+  var anchorParts = WEEK_ANCHOR.split("-").map(Number);
+  var ANCHOR = Date.UTC(anchorParts[0], anchorParts[1]-1, anchorParts[2]);
+  function weekType(date){
+    var d = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    var days = Math.floor((d - ANCHOR) / 86400000);
+    var week = Math.floor(days / 7);
+    var mod = ((week % 2) + 2) % 2;
+    return mod === 0 ? "denom" : "num"; // ANCHOR-неделя = знаменательная
+  }
+
+  var state = { weekOverride:"auto", selectedDay:null };
+  function effectiveWeekType(date){ return state.weekOverride === "auto" ? weekType(date) : state.weekOverride; }
+
+  function resolvePair(p, wt){
+    if (p.split) return wt === "num" ? p.num : p.denom;
+    return p;
+  }
+  function dayInfo(idx, wt){
+    var d = SCHEDULE[idx];
+    if (!d) return [];
+    return d.pairs.map(function(p){ return resolvePair(p, wt); });
+  }
+  function isSplitPair(idx, pairNum){
+    var d = SCHEDULE[idx];
+    if (!d) return false;
+    var found = d.pairs.filter(function(p){ return p.pair === pairNum; })[0];
+    return !!(found && found.split);
+  }
+
+  function renderClock(now){
+    document.getElementById("clockTime").textContent = pad(now.getHours())+":"+pad(now.getMinutes());
+    document.getElementById("clockDate").textContent = now.toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"});
+  }
+  function renderWeekPill(now){
+    var wt = effectiveWeekType(now);
+    var pill = document.getElementById("weekPill");
+    var txt = document.getElementById("weekPillText");
+    pill.className = "pill " + wt;
+    txt.textContent = (wt === "num" ? "Числительная неделя" : "Знаменательная неделя");
+  }
+  function buildDayTabs(now){
+    var wrap = document.getElementById("dayTabs");
+    wrap.innerHTML = "";
+    var todayIdx = (now.getDay()+6)%7;
+    for (var i=0;i<6;i++){
+      (function(i){
+        var b = document.createElement("button");
+        b.innerHTML = DAY_SHORT[i] + '<span class="n">' + (i+1) + '</span>';
+        if (i === todayIdx) b.classList.add("today");
+        if (i === state.selectedDay) b.classList.add("active");
+        b.addEventListener("click", function(){ state.selectedDay = i; renderAll(); });
+        wrap.appendChild(b);
+      })(i);
+    }
+  }
+  function renderLegend(now){
+    var wt = effectiveWeekType(now);
+    var used = {};
+    Object.keys(SCHEDULE).forEach(function(k){
+      dayInfo(k, wt).forEach(function(c){
+        var key = c.name.split(" ").slice(0,2).join(" ");
+        used[key] = colorFor(c.name);
+      });
+    });
+    var wrap = document.getElementById("legend");
+    wrap.innerHTML = "";
+    Object.keys(used).forEach(function(k){
+      var li = document.createElement("span");
+      li.className = "li";
+      li.innerHTML = '<span class="sw" style="background:'+used[k]+'"></span>'+k;
+      wrap.appendChild(li);
+    });
+  }
+
+  function findCurrentAndNext(now){
+    var idx = (now.getDay()+6)%7;
+    if (idx > 5) return {kind:"weekend"};
+    var todayKey = dateKey(now);
+    if (OVERRIDES[todayKey]) return {kind:"override", data:OVERRIDES[todayKey]};
+    var wt = effectiveWeekType(now);
+    var list = dayInfo(idx, wt);
+    var grid = idx === 5 ? SAT_PAIRS : PAIRS;
+    var nowMin = now.getHours()*60 + now.getMinutes();
+    var current = null, next = null;
+    for (var i=0;i<list.length;i++){
+      var p = grid.filter(function(g){ return g.n === list[i].pair; })[0];
+      if (!p) continue;
+      var s = toMinutes(p.start), e = toMinutes(p.end);
+      if (nowMin >= s && nowMin < e){ current = {c:list[i], p:p}; }
+      if (nowMin < s && !next){ next = {c:list[i], p:p}; }
+    }
+    return {kind:"day", current:current, next:next, dayIdx:idx};
+  }
+
+  function renderHero(now){
+    var hero = document.getElementById("hero");
+    var label = document.getElementById("heroLabel");
+    var status = document.getElementById("heroStatus");
+    var subject = document.getElementById("heroSubject");
+    var meta = document.getElementById("heroMeta");
+    var countdown = document.getElementById("heroCountdown");
+    hero.classList.remove("event");
+
+    var res = findCurrentAndNext(now);
+
+    if (res.kind === "override"){
+      hero.classList.add("event");
+      label.textContent = "Сегодня";
+      status.textContent = "СОБЫТИЕ"; status.className = "status soon";
+      subject.textContent = res.data.title;
+      meta.innerHTML = '<span class="metaitem">🕒 '+res.data.time+'</span><span class="metaitem">📍 '+res.data.place+'</span>';
+      countdown.textContent = res.data.note;
+      return;
+    }
+    if (res.kind === "weekend"){
+      label.textContent = "Сегодня"; status.textContent = "ВЫХОДНОЙ"; status.className = "status off";
+      subject.textContent = "Пар нет"; meta.innerHTML = ""; countdown.textContent = "Отдыхай — следующая пара в понедельник.";
+      return;
+    }
+    if (res.current){
+      label.textContent = "Сейчас идёт";
+      status.textContent = "ИДЁТ"; status.className = "status live";
+      subject.textContent = res.current.c.name;
+      meta.innerHTML = '<span class="metaitem">👤 '+res.current.c.teacher+'</span><span class="metaitem">📍 '+(res.current.c.room2||res.current.c.room)+'</span>';
+      var endMin = toMinutes(res.current.p.end);
+      var left = endMin - (now.getHours()*60+now.getMinutes());
+      countdown.innerHTML = 'До конца пары — <b>'+left+' мин</b> (до '+res.current.p.end+')';
+    } else if (res.next){
+      label.textContent = "Следующая пара";
+      var startMin = toMinutes(res.next.p.start);
+      var left2 = startMin - (now.getHours()*60+now.getMinutes());
+      status.textContent = left2 <= 20 ? "СКОРО" : "ПОЗЖЕ"; status.className = left2 <= 20 ? "status soon" : "status off";
+      subject.textContent = res.next.c.name;
+      meta.innerHTML = '<span class="metaitem">👤 '+res.next.c.teacher+'</span><span class="metaitem">📍 '+(res.next.c.room2||res.next.c.room)+'</span>';
+      countdown.innerHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+left2+' мин';
+    } else {
+      label.textContent = "Сегодня"; status.textContent = "ПАР БОЛЬШЕ НЕТ"; status.className = "status off";
+      subject.textContent = "Занятия на сегодня закончились"; meta.innerHTML = ""; countdown.textContent = "";
+    }
+  }
+
+  function renderDayList(now){
+    var idx = state.selectedDay;
+    var wt = effectiveWeekType(now);
+    var list = dayInfo(idx, wt);
+    var grid = idx === 5 ? SAT_PAIRS : PAIRS;
+    var note = SCHEDULE[idx] && SCHEDULE[idx].note;
+    var noteEl = document.getElementById("dayNote");
+    if (note){ noteEl.hidden = false; noteEl.innerHTML = "⚠️ " + note; } else { noteEl.hidden = true; }
+
+    var wrap = document.getElementById("dayList");
+    wrap.innerHTML = "";
+    if (!list.length){
+      var e = document.createElement("div");
+      e.className = "empty"; e.textContent = "Пар не найдено";
+      wrap.appendChild(e); return;
+    }
+    var todayIdx = (now.getDay()+6)%7;
+    var nowMin = now.getHours()*60+now.getMinutes();
+    var todayKey = dateKey(now);
+    var isOverrideToday = idx === todayIdx && OVERRIDES[todayKey];
+
+    list.forEach(function(c){
+      var p = grid.filter(function(g){ return g.n === c.pair; })[0];
+      var row = document.createElement("div");
+      row.className = "row";
+      var isNowActive = !isOverrideToday && idx === todayIdx && p && nowMin >= toMinutes(p.start) && nowMin < toMinutes(p.end);
+      if (isNowActive) row.classList.add("active");
+      var splitTag = isSplitPair(idx, c.pair) ? '<span class="splitTag">завис. от недели</span>' : '';
+      row.innerHTML =
+        '<div class="time">'+ (p? p.start : "?") +'<b>'+ (p? p.end : "") +'</b></div>' +
+        '<div class="stripe" style="background:'+colorFor(c.name)+'"></div>' +
+        '<div class="body"><div class="subj">'+c.name+splitTag+'</div>' +
+          '<div class="sub"><span>👤 '+c.teacher+'</span><span>📍 '+(c.room2||c.room)+'</span></div></div>';
+      wrap.appendChild(row);
+    });
+
+    if (isOverrideToday){
+      var od = OVERRIDES[todayKey];
+      var row2 = document.createElement("div");
+      row2.className = "daynote";
+      row2.hidden = false;
+      row2.innerHTML = "📌 Сегодня по факту: <b>"+od.title+"</b>, "+od.time+", "+od.place;
+      wrap.parentNode.insertBefore(row2, wrap);
+    }
+  }
+
+  function renderAll(){
+    var now = new Date();
+    renderClock(now);
+    renderWeekPill(now);
+    if (state.selectedDay === null){
+      var idx = (now.getDay()+6)%7;
+      state.selectedDay = idx > 5 ? 0 : idx;
+    }
+    buildDayTabs(now);
+    renderHero(now);
+    renderDayList(now);
+    renderLegend(now);
+  }
+
+  document.getElementById("weekSeg").addEventListener("click", function(e){
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function(b){ b.classList.remove("active"); });
+    btn.classList.add("active");
+    state.weekOverride = btn.getAttribute("data-w");
+    renderAll();
+  });
+
+  renderAll();
+  setInterval(renderAll, 15000);
+})();
+</script>
+
+</body>
+</html>
