@@ -32,6 +32,11 @@
     --fs-b:15px;   --fw-b:500; --ls-b:0em;            /* обычный текст */
     --fs-c:12.5px; --fw-c:440; --ls-c:0.02em;         /* подписи, преподаватель/аудитория */
     --fs-eyebrow:11px; --fw-eyebrow:520; --ls-eyebrow:0.13em; /* однословные статусы КАПСОМ */
+
+    --t-fast:130ms; --t-med:220ms; --t-slow:340ms; --ease:cubic-bezier(.4,0,.2,1); --ease-out:cubic-bezier(.16,1,.3,1);
+  }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ transition-duration:0.001ms !important; animation-duration:0.001ms !important; scroll-behavior:auto !important; }
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]):not([data-theme="paper"]){
@@ -81,6 +86,22 @@
     padding-block:20px 48px;
     display:flex;
     justify-content:center;
+  }
+  /* элементы, которые НЕ пересоздаются в JS каждый рендер — на них смена темы
+     и смена состояния (active/today/selected) реально анимируется */
+  body, .card, .hero, .pill, .seg, .seg button, .daytabs button, .calBlock, .calCell,
+  .room-tag, .calNav button, .calToday, .row.active, .status, .daynote{
+    transition:background-color var(--t-med) var(--ease), color var(--t-med) var(--ease),
+               border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease);
+  }
+  .seg button, .daytabs button, .calCell:not(.pad), .calNav button, .calToday, .calToggle{
+    transition:background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+               border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+               transform var(--t-fast) var(--ease);
+  }
+  .seg button:active, .daytabs button:not(.active):active, .calCell:not(.pad):not(.disabled):active,
+  .calNav button:not(:disabled):active, .calToday:active, .calToggle:active{
+    transform:scale(0.94);
   }
   .app{width:100%; max-width:520px; display:flex; flex-direction:column; gap:16px;}
 
@@ -186,9 +207,14 @@
   }
   .calToggle .lbl{font-size:var(--fs-b); font-weight:var(--fw-b); letter-spacing:var(--ls-b);}
   .calToggle .sub{display:block; font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2); margin-top:2px;}
-  .calChev{flex:none; width:9px; height:9px; border-right:2px solid var(--text2); border-bottom:2px solid var(--text2); transform:rotate(45deg); transition:transform .2s ease; margin-right:4px;}
+  .calChev{flex:none; width:9px; height:9px; border-right:2px solid var(--text2); border-bottom:2px solid var(--text2); transform:rotate(45deg); transition:transform var(--t-med) var(--ease); margin-right:4px;}
   .calToggle.open .calChev{transform:rotate(225deg); margin-top:4px; margin-right:0;}
-  .calBody{padding:4px 14px 16px; border-top:1px solid var(--sep);}
+  .calBody{
+    display:grid; grid-template-rows:0fr; opacity:0;
+    transition:grid-template-rows var(--t-slow) var(--ease), opacity var(--t-fast) var(--ease);
+  }
+  .calBody.open{ grid-template-rows:1fr; opacity:1; transition:grid-template-rows var(--t-slow) var(--ease), opacity var(--t-med) var(--ease) 60ms; }
+  .calBodyInner{ overflow:hidden; min-height:0; padding:4px 14px 16px; border-top:1px solid var(--sep); }
   .calNav{display:flex; align-items:center; justify-content:space-between; padding:12px 2px 10px;}
   .calNav button{
     appearance:none; border:none; background:rgba(118,118,128,0.14); color:var(--text);
@@ -279,16 +305,18 @@
       </span>
       <span class="calChev"></span>
     </button>
-    <div class="calBody" id="calBody" hidden>
-      <div class="calNav">
-        <button type="button" id="calPrev" aria-label="Предыдущий месяц">‹</button>
-        <div class="calMonthLabel" id="calMonthLabel">—</div>
-        <button type="button" id="calNext" aria-label="Следующий месяц">›</button>
+    <div class="calBody" id="calBody">
+      <div class="calBodyInner">
+        <div class="calNav">
+          <button type="button" id="calPrev" aria-label="Предыдущий месяц">‹</button>
+          <div class="calMonthLabel" id="calMonthLabel">—</div>
+          <button type="button" id="calNext" aria-label="Следующий месяц">›</button>
+        </div>
+        <div class="calWeekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+        <div class="calGrid" id="calGrid"></div>
+        <div class="calHint" id="calHint"></div>
+        <button type="button" class="calToday" id="calTodayBtn">Сегодня</button>
       </div>
-      <div class="calWeekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
-      <div class="calGrid" id="calGrid"></div>
-      <div class="calHint" id="calHint"></div>
-      <button type="button" class="calToday" id="calTodayBtn">Сегодня</button>
     </div>
   </div>
 
@@ -353,7 +381,7 @@
   var CALENDAR_MIN = new Date(2026, 8, 1);
   var CALENDAR_MAX = new Date(2027, 0, 31);
 
-  var state = { weekOverride:"auto", selectedDate:null, calMonth:null, calOpen:false };
+  var state = { weekOverride:"auto", selectedDate:null, calMonth:null, calOpen:false, followToday:true };
   function effectiveWeekType(date){ return state.weekOverride === "auto" ? weekType(date) : state.weekOverride; }
   function sameDate(a,b){ return a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
   function atMidnight(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -388,20 +416,36 @@
   }
   function buildDayTabs(now, selDate){
     var wrap = document.getElementById("dayTabs");
-    wrap.innerHTML = "";
     var weekMonIdx = (selDate.getDay()+6)%7;
     var monday = new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate() - weekMonIdx);
-    for (var i=0;i<6;i++){
-      (function(i){
-        var d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+i);
-        var b = document.createElement("button");
-        b.innerHTML = DAY_SHORT[i] + '<span class="n">' + d.getDate() + '</span>';
-        if (sameDate(d, now)) b.classList.add("today");
-        if (sameDate(d, selDate)) b.classList.add("active");
-        b.addEventListener("click", function(){ state.selectedDate = d; renderAll(); });
-        wrap.appendChild(b);
-      })(i);
+    var mondayKey = dateKey(monday);
+
+    // Пересоздаём кнопки только когда реально сменилась неделя — иначе просто
+    // переключаем классы на тех же узлах, чтобы CSS-переход подсветки работал
+    // (на пересозданных с нуля узлах transition не проигрывается).
+    if (wrap.dataset.mondayKey !== mondayKey){
+      wrap.innerHTML = "";
+      wrap.dataset.mondayKey = mondayKey;
+      wrap._days = [];
+      for (var i=0;i<6;i++){
+        (function(i){
+          var d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+i);
+          var b = document.createElement("button");
+          b.innerHTML = DAY_SHORT[i] + '<span class="n">' + d.getDate() + '</span>';
+          b.addEventListener("click", function(){
+            state.selectedDate = d;
+            state.followToday = false;
+            renderAll();
+          });
+          wrap.appendChild(b);
+          wrap._days.push({date:d, btn:b});
+        })(i);
+      }
     }
+    wrap._days.forEach(function(entry){
+      entry.btn.classList.toggle("today", sameDate(entry.date, now));
+      entry.btn.classList.toggle("active", sameDate(entry.date, selDate));
+    });
   }
   function renderLegend(selDate){
     var wt = effectiveWeekType(selDate);
@@ -445,55 +489,70 @@
 
   function renderHero(now){
     var hero = document.getElementById("hero");
-    var label = document.getElementById("heroLabel");
-    var status = document.getElementById("heroStatus");
-    var subject = document.getElementById("heroSubject");
-    var meta = document.getElementById("heroMeta");
-    var countdown = document.getElementById("heroCountdown");
-    hero.classList.remove("event");
+    var labelEl = document.getElementById("heroLabel");
+    var statusEl = document.getElementById("heroStatus");
+    var subjectEl = document.getElementById("heroSubject");
+    var metaEl = document.getElementById("heroMeta");
+    var countdownEl = document.getElementById("heroCountdown");
 
     var res = findCurrentAndNext(now);
+    var v = { event:false, label:"", status:"", statusClass:"", subject:"", metaHTML:"", countdownHTML:"" };
 
     if (res.kind === "override"){
-      hero.classList.add("event");
-      label.textContent = "Сегодня";
-      status.textContent = "Событие"; status.className = "status soon";
-      subject.textContent = res.data.title;
-      meta.innerHTML = '<span class="metaitem">'+res.data.time+'</span><span class="room-tag">'+res.data.place+'</span>';
-      countdown.textContent = res.data.note;
-      return;
-    }
-    if (res.kind === "weekend"){
-      label.textContent = "Сегодня"; status.textContent = "Выходной"; status.className = "status off";
-      subject.textContent = "Пар нет"; meta.innerHTML = ""; countdown.textContent = "Следующая пара — в понедельник.";
-      return;
-    }
-    if (res.kind === "empty"){
-      label.textContent = "Сегодня"; status.textContent = "Пар нет"; status.className = "status off";
-      subject.textContent = "Занятий не запланировано"; meta.innerHTML = "";
-      countdown.textContent = (SCHEDULE[res.dayIdx] && SCHEDULE[res.dayIdx].note) || "";
-      return;
-    }
-    if (res.current){
-      label.textContent = "Сейчас идёт";
-      status.textContent = "Идёт"; status.className = "status live";
-      subject.textContent = res.current.c.name;
-      meta.innerHTML = '<span class="metaitem">'+res.current.c.teacher+'</span><span class="room-tag">'+(res.current.c.room2||res.current.c.room)+'</span>';
+      v.event = true;
+      v.label = "Сегодня"; v.status = "Событие"; v.statusClass = "status soon";
+      v.subject = res.data.title;
+      v.metaHTML = '<span class="metaitem">'+res.data.time+'</span><span class="room-tag">'+res.data.place+'</span>';
+      v.countdownHTML = res.data.note;
+    } else if (res.kind === "weekend"){
+      v.label = "Сегодня"; v.status = "Выходной"; v.statusClass = "status off";
+      v.subject = "Пар нет"; v.countdownHTML = "Следующая пара — в понедельник.";
+    } else if (res.kind === "empty"){
+      v.label = "Сегодня"; v.status = "Пар нет"; v.statusClass = "status off";
+      v.subject = "Занятий не запланировано";
+      v.countdownHTML = (SCHEDULE[res.dayIdx] && SCHEDULE[res.dayIdx].note) || "";
+    } else if (res.current){
+      v.label = "Сейчас идёт"; v.status = "Идёт"; v.statusClass = "status live";
+      v.subject = res.current.c.name;
+      v.metaHTML = '<span class="metaitem">'+res.current.c.teacher+'</span><span class="room-tag">'+(res.current.c.room2||res.current.c.room)+'</span>';
       var endMin = toMinutes(res.current.p.end);
       var left = endMin - (now.getHours()*60+now.getMinutes());
-      countdown.innerHTML = 'До конца пары — <b>'+left+' мин</b> (до '+res.current.p.end+')';
+      v.countdownHTML = 'До конца пары — <b>'+left+' мин</b> (до '+res.current.p.end+')';
     } else if (res.next){
-      label.textContent = "Следующая пара";
+      v.label = "Следующая пара";
       var startMin = toMinutes(res.next.p.start);
       var left2 = startMin - (now.getHours()*60+now.getMinutes());
-      status.textContent = left2 <= 20 ? "Скоро" : "Позже"; status.className = left2 <= 20 ? "status soon" : "status off";
-      subject.textContent = res.next.c.name;
-      meta.innerHTML = '<span class="metaitem">'+res.next.c.teacher+'</span><span class="room-tag">'+(res.next.c.room2||res.next.c.room)+'</span>';
-      countdown.innerHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+left2+' мин';
+      v.status = left2 <= 20 ? "Скоро" : "Позже"; v.statusClass = left2 <= 20 ? "status soon" : "status off";
+      v.subject = res.next.c.name;
+      v.metaHTML = '<span class="metaitem">'+res.next.c.teacher+'</span><span class="room-tag">'+(res.next.c.room2||res.next.c.room)+'</span>';
+      v.countdownHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+left2+' мин';
     } else {
-      label.textContent = "Сегодня"; status.textContent = "Пар больше нет"; status.className = "status off";
-      subject.textContent = "Занятия на сегодня закончились"; meta.innerHTML = ""; countdown.textContent = "";
+      v.label = "Сегодня"; v.status = "Пар больше нет"; v.statusClass = "status off";
+      v.subject = "Занятия на сегодня закончились";
     }
+
+    function apply(){
+      hero.classList.toggle("event", v.event);
+      labelEl.textContent = v.label;
+      statusEl.textContent = v.status; statusEl.className = v.statusClass;
+      subjectEl.textContent = v.subject;
+      metaEl.innerHTML = v.metaHTML;
+      countdownEl.innerHTML = v.countdownHTML;
+    }
+
+    // Плавно перекрещиваем содержимое, только когда сменился реальный предмет/
+    // статус (а не на каждый 15-секундный тик, где меняются лишь минуты —
+    // иначе карточка мерцала бы каждые 15 секунд).
+    var sig = v.event + "|" + v.label + "|" + v.status + "|" + v.subject;
+    if (hero.dataset.sig === undefined){ hero.dataset.sig = sig; apply(); return; }
+    if (hero.dataset.sig === sig){ apply(); return; }
+    hero.dataset.sig = sig;
+    var fadeEls = [labelEl, statusEl, subjectEl, metaEl, countdownEl];
+    fadeEls.forEach(function(el){ el.style.transition = "opacity 130ms ease"; el.style.opacity = "0"; });
+    setTimeout(function(){
+      apply();
+      fadeEls.forEach(function(el){ el.style.opacity = "1"; });
+    }, 130);
   }
 
   function renderDayList(now, selDate){
@@ -569,9 +628,9 @@
 
     grid.innerHTML = "";
     for (var i=0;i<startPad;i++){
-      var pad = document.createElement("span");
-      pad.className = "calCell pad";
-      grid.appendChild(pad);
+      var padCell = document.createElement("span");
+      padCell.className = "calCell pad";
+      grid.appendChild(padCell);
     }
     for (var day=1; day<=daysInMonth; day++){
       (function(day){
@@ -590,8 +649,9 @@
         if (!disabled){
           btn.addEventListener("click", function(){
             state.selectedDate = d;
+            state.followToday = false;
             state.calOpen = false;
-            document.getElementById("calBody").hidden = true;
+            document.getElementById("calBody").classList.remove("open");
             document.getElementById("calToggle").classList.remove("open");
             renderAll();
           });
@@ -604,13 +664,16 @@
 
     prevBtn.disabled = (m.getFullYear() === CALENDAR_MIN.getFullYear() && m.getMonth() === CALENDAR_MIN.getMonth());
     nextBtn.disabled = (m.getFullYear() === CALENDAR_MAX.getFullYear() && m.getMonth() === CALENDAR_MAX.getMonth());
-    hint.textContent = "Точками отмечены дни с разовыми событиями. Дальше " +
-      MONTHS_RU[CALENDAR_MAX.getMonth()] + " " + CALENDAR_MAX.getFullYear() + " официальный календарь недель пока не подтверждён.";
+    hint.textContent = "Точками отмечены дни с разовыми событиями. Официальный календарь недель подтверждён по " +
+      MONTHS_RU[CALENDAR_MAX.getMonth()] + " " + CALENDAR_MAX.getFullYear() + " — дальше пока не проверено.";
   }
 
   function renderAll(){
     var now = new Date();
-    if (state.selectedDate === null) state.selectedDate = atMidnight(now);
+    // followToday=true (по умолчанию, пока пользователь сам не выбрал день) —
+    // держим selectedDate синхронным с реальной датой. Раньше день выбирался
+    // один раз и "залипал", если оставить вкладку открытой через полночь.
+    if (state.selectedDate === null || state.followToday) state.selectedDate = atMidnight(now);
     if (state.calMonth === null) state.calMonth = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
     var selDate = state.selectedDate;
 
@@ -659,25 +722,39 @@
   var calBody = document.getElementById("calBody");
   calToggleBtn.addEventListener("click", function(){
     state.calOpen = !state.calOpen;
-    calBody.hidden = !state.calOpen;
+    calBody.classList.toggle("open", state.calOpen);
     calToggleBtn.classList.toggle("open", state.calOpen);
     if (state.calOpen){
       state.calMonth = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
       renderCalendar(new Date());
     }
   });
-  document.getElementById("calPrev").addEventListener("click", function(){
-    state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth()-1, 1);
-    renderCalendar(new Date());
-  });
-  document.getElementById("calNext").addEventListener("click", function(){
-    state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth()+1, 1);
-    renderCalendar(new Date());
-  });
+  function navMonth(dir){
+    var g = document.getElementById("calGrid");
+    g.style.transition = "opacity 110ms ease, transform 110ms ease";
+    g.style.opacity = "0";
+    g.style.transform = "translateX(" + (dir > 0 ? "-10px" : "10px") + ")";
+    setTimeout(function(){
+      state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth()+dir, 1);
+      renderCalendar(new Date());
+      g.style.transition = "none";
+      g.style.transform = "translateX(" + (dir > 0 ? "10px" : "-10px") + ")";
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){
+          g.style.transition = "opacity 180ms ease, transform 180ms var(--ease-out)";
+          g.style.opacity = "1";
+          g.style.transform = "translateX(0)";
+        });
+      });
+    }, 110);
+  }
+  document.getElementById("calPrev").addEventListener("click", function(){ navMonth(-1); });
+  document.getElementById("calNext").addEventListener("click", function(){ navMonth(1); });
   document.getElementById("calTodayBtn").addEventListener("click", function(){
     state.selectedDate = atMidnight(new Date());
+    state.followToday = true;
     state.calOpen = false;
-    calBody.hidden = true;
+    calBody.classList.remove("open");
     calToggleBtn.classList.remove("open");
     renderAll();
   });
