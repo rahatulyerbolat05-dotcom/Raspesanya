@@ -1,10 +1,4 @@
-<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0A84FF">
-<meta name="description" content="Живое расписание группы 25-ПРО-1">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>25-ПРО-1 Расписание</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -108,9 +102,9 @@
   .topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
   .titleblock h1{margin:0; font-size:var(--fs-l); font-weight:var(--fw-l); letter-spacing:var(--ls-l); line-height:1.05;}
   .titleblock p{margin:4px 0 0; font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2);}
-  .clock{text-align:right; flex:none; padding-top:2px;}
-  .clock .time{font-size:var(--fs-l); font-weight:var(--fw-l); letter-spacing:var(--ls-l); font-variant-numeric:tabular-nums;}
-  .clock .date{font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2); margin-top:2px;}
+  .clock{text-align:right; flex:none;}
+  .clock .time{margin:0; font-size:var(--fs-l); font-weight:var(--fw-l); letter-spacing:var(--ls-l); line-height:1.05; font-variant-numeric:tabular-nums;}
+  .clock .date{font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2); margin-top:4px;}
 
   .controlbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .pill{
@@ -140,7 +134,8 @@
     display:flex; flex-direction:column; gap:14px;
   }
   .hero.event{background:linear-gradient(160deg,#B8600A,#C23A57); border:none;}
-  .hero.event .herorow .label, .hero.event .herorow .status, .hero.event .subject, .hero.event .meta, .hero.event .metaitem, .hero.event .room-tag{color:#fff !important; opacity:1 !important; background:rgba(255,255,255,0.18) !important;}
+  .hero.event .herorow .label, .hero.event .subject, .hero.event .meta, .hero.event .metaitem{color:#fff !important; opacity:1 !important;}
+  .hero.event .herorow .status, .hero.event .room-tag{color:#fff !important; opacity:1 !important; background:rgba(255,255,255,0.18) !important;}
   .herorow{display:flex; align-items:center; justify-content:space-between;}
   .herorow .label{font-size:var(--fs-eyebrow); font-weight:var(--fw-eyebrow); text-transform:uppercase; letter-spacing:var(--ls-eyebrow); color:var(--text2);}
   .herorow .status{font-size:var(--fs-eyebrow); font-weight:var(--fw-eyebrow); letter-spacing:var(--ls-eyebrow); text-transform:uppercase; padding:4px 10px; border-radius:100px;}
@@ -239,8 +234,7 @@
   .calHint{font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2); padding:10px 2px 0; line-height:1.5;}
   .calToday{margin-top:10px; width:100%; appearance:none; border:1px solid var(--sep); background:transparent; color:var(--accent); font-family:inherit; font-size:var(--fs-c); font-weight:600; padding:9px; border-radius:11px; cursor:pointer;}
 </style>
-</head>
-<body>
+
 <script>
   // Тема применяется до отрисовки — без "вспышки" неправильной темы.
   (function(){
@@ -763,5 +757,5 @@
   setInterval(renderAll, 15000);
 })();
 </script>
-</body>
-</html>
+
+</body></html>
