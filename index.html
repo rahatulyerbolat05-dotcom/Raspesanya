@@ -155,7 +155,7 @@
     background:rgba(120,120,128,0.14); color:var(--text2);
     white-space:nowrap;
   }
-  .room-tag::before{content:"АУД"; font-size:9px; font-weight:700; letter-spacing:0.06em; opacity:0.55;}
+  .room-tag.num::before{content:"АУД"; font-size:9px; font-weight:700; letter-spacing:0.06em; opacity:0.55;}
 
   .daytabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
   .daytabs::-webkit-scrollbar{display:none;}
@@ -317,7 +317,7 @@
   <div class="legend" id="legend"></div>
 
   <div class="foot">
-    Данные — по подтверждённым фото расписания группы. Пары с меткой «завис. от недели» ещё уточняются.<br>
+    Стабильное расписание от 25.09.2026. Пары с меткой «только числ./знам.» идут через неделю.<br>
     Расписание редактируется в одном файле — schedule-data.js.
   </div>
 </div>
@@ -348,13 +348,14 @@
   var COLORS = {
     "РО 1.1":"#FF9F0A", "РО 1.2":"#5E5CE6", "РО 1.3":"#0A84FF", "РО 1.4":"#FF375F",
     "РО 1.5":"#64D2FF", "РО 1.6":"#30D158", "ООМ 1":"#66D4CF", "ООМ 2":"#BF5AF2",
-    "Факультатив":"#FFD60A", "Предмет":"#8E8E93"
+    "РО 3.5":"#AC8E68", "Факультатив":"#FFD60A"
   };
   function colorFor(code){
     for (var k in COLORS){ if (code.indexOf(k) === 0) return COLORS[k]; }
     return "#8E8E93";
   }
 
+  function roomTag(r){ return '<span class="room-tag'+(/^\d+$/.test(r) ? ' num' : '')+'">'+r+'</span>'; }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
   function toMinutes(hhmm){ var p=hhmm.split(":"); return (+p[0])*60 + (+p[1]); }
   function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -508,7 +509,7 @@
     } else if (res.current){
       v.label = "Сейчас идёт"; v.status = "Идёт"; v.statusClass = "status live";
       v.subject = res.current.c.name;
-      v.metaHTML = '<span class="metaitem">'+res.current.c.teacher+'</span><span class="room-tag">'+(res.current.c.room2||res.current.c.room)+'</span>';
+      v.metaHTML = '<span class="metaitem">'+res.current.c.teacher+'</span>'+roomTag(res.current.c.room2||res.current.c.room)+'';
       var endMin = toMinutes(res.current.p.end);
       var left = endMin - (now.getHours()*60+now.getMinutes());
       v.countdownHTML = 'До конца пары — <b>'+left+' мин</b> (до '+res.current.p.end+')';
@@ -518,7 +519,7 @@
       var left2 = startMin - (now.getHours()*60+now.getMinutes());
       v.status = left2 <= 20 ? "Скоро" : "Позже"; v.statusClass = left2 <= 20 ? "status soon" : "status off";
       v.subject = res.next.c.name;
-      v.metaHTML = '<span class="metaitem">'+res.next.c.teacher+'</span><span class="room-tag">'+(res.next.c.room2||res.next.c.room)+'</span>';
+      v.metaHTML = '<span class="metaitem">'+res.next.c.teacher+'</span>'+roomTag(res.next.c.room2||res.next.c.room)+'';
       v.countdownHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+left2+' мин';
     } else {
       v.label = "Сегодня"; v.status = "Пар больше нет"; v.statusClass = "status off";
@@ -595,12 +596,12 @@
       row.className = "row";
       var isNowActive = isToday && p && nowMin >= toMinutes(p.start) && nowMin < toMinutes(p.end);
       if (isNowActive) row.classList.add("active");
-      var splitTag = isSplitPair(idx, c.pair) ? '<span class="splitTag">завис. от недели</span>' : '';
+      var splitTag = isSplitPair(idx, c.pair) ? '<span class="splitTag">'+(wt === "num" ? "только числ." : "только знам.")+'</span>' : '';
       row.innerHTML =
         '<div class="time">'+ (p? p.start : "?") +'<b>'+ (p? p.end : "") +'</b></div>' +
         '<div class="stripe" style="background:'+colorFor(c.name)+'"></div>' +
         '<div class="body"><div class="subj">'+c.name+splitTag+'</div>' +
-          '<div class="sub"><span>'+c.teacher+'</span><span class="room-tag">'+(c.room2||c.room)+'</span></div></div>';
+          '<div class="sub"><span>'+c.teacher+'</span>'+roomTag(c.room2||c.room)+'</div></div>';
       wrap.appendChild(row);
     });
   }
