@@ -100,6 +100,8 @@
   .app{width:100%; max-width:520px; display:flex; flex-direction:column; gap:16px;}
 
   .topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+  .titleblock{min-width:0;}
+  .titleline{display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px;}
   .titleblock h1{margin:0; font-size:var(--fs-l); font-weight:var(--fw-l); letter-spacing:var(--ls-l); line-height:1.05;}
   .titleblock p{margin:4px 0 0; font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2);}
   .clock{text-align:right; flex:none;}
@@ -107,6 +109,14 @@
   .clock .date{font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text2); margin-top:4px;}
 
   .controlbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  /* на телефоне обе группы кнопок помещаются в одну строку */
+  .seg .ls{display:none;}
+  @media (max-width:420px){
+    .controlbar{gap:6px;}
+    .controlbar .seg button{padding:6px 5px; letter-spacing:0.02em;}
+    .seg .lf{display:none;}
+    .seg .ls{display:inline;}
+  }
   .pill{
     display:inline-flex; align-items:center; gap:6px;
     padding:6px 12px; border-radius:100px;
@@ -206,16 +216,17 @@
   .brk{position:relative; overflow:hidden;}
 
   /* прогресс текущей пары/перемены — «вода»: всё под ней становится ч/б негативом.
-     Два слоя: серый в режиме saturation обесцвечивает, белый в режиме difference инвертирует.
-     Форму края (волну) задаёт clip-path, который каждый кадр пересчитывает пружинная модель
+     Слой .s (серый, saturation) обесцвечивает, слой .d (белый, difference) инвертирует.
+     Край — плавная волна как у capsule-render «waving», только вертикальная:
+     основная вода + полупрозрачная «кромка» (.g), которая то выбегает вперёд, то прячется.
+     Форму задаёт clip-path, JS пересчитывает его каждый кадр
      (backdrop-filter тут не годится — браузеры режут его прямоугольником, волна пропадает). */
   .liq{position:absolute; inset:0; pointer-events:none;}
   .liq i{position:absolute; inset:0; clip-path:inset(0 100% 0 0);}
-  .liq i:first-child{background:#808080; mix-blend-mode:saturation;}
-  .liq i + i{background:#fff; mix-blend-mode:difference;}
-  .row.active, .brk.active{cursor:pointer;}
+  .liq .s{background:#808080; mix-blend-mode:saturation;}
+  .liq .d{background:#fff; mix-blend-mode:difference;}
+  .liq .g{opacity:.4;}
   .row:last-child{border-bottom:none;}
-  .row.active{background:rgba(10,132,255,0.08);}
   .row .time{width:60px; flex:none; font-size:11.5px; font-weight:var(--fw-c); color:var(--text2); font-variant-numeric:tabular-nums; line-height:1.5; padding-top:2px;}
   .row .time b{display:block; font-size:12.5px; color:var(--text); font-weight:600;}
   .stripe{width:3px; align-self:stretch; border-radius:3px; flex:none; background:var(--sep);}
@@ -285,7 +296,10 @@
 <div class="app">
   <div class="topbar">
     <div class="titleblock">
-      <h1>25-ПРО-1</h1>
+      <div class="titleline">
+        <h1>25-ПРО-1</h1>
+        <span class="pill" id="weekPill"><span class="dot"></span><span id="weekPillText">—</span></span>
+      </div>
       <p>Колледж им. Кумаша Нургалиева</p>
     </div>
     <div class="clock">
@@ -295,19 +309,16 @@
   </div>
 
   <div class="controlbar">
-    <span class="pill" id="weekPill"><span class="dot"></span><span id="weekPillText">—</span></span>
+    <span class="seg" id="themeSeg">
+      <button data-t="" aria-label="Система"><span class="lf">Система</span><span class="ls">Сист.</span></button>
+      <button data-t="light" aria-label="Светлая"><span class="lf">Светлая</span><span class="ls">Свет.</span></button>
+      <button data-t="dark" aria-label="Тёмная"><span class="lf">Тёмная</span><span class="ls">Тёмн.</span></button>
+      <button data-t="paper" aria-label="Бумага"><span class="lf">Бумага</span><span class="ls">Бум.</span></button>
+    </span>
     <span class="seg" id="weekSeg" style="margin-left:auto;">
       <button data-w="auto" class="active">Авто</button>
       <button data-w="denom">Знам.</button>
       <button data-w="num">Числ.</button>
-    </span>
-  </div>
-  <div class="controlbar">
-    <span class="seg" id="themeSeg">
-      <button data-t="">Система</button>
-      <button data-t="light">Светлая</button>
-      <button data-t="dark">Тёмная</button>
-      <button data-t="paper">Бумага</button>
     </span>
   </div>
 
@@ -362,7 +373,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-10-01c"></script>
+<script src="schedule-data.js?v=2026-10-01f"></script>
 <script>
 (function(){
   "use strict";
@@ -743,12 +754,17 @@
     tickLiquid();
   }
 
-  // «Вода» текущего события: два слоя поверх строки (saturation + difference) —
-  // всё под ним превращается в ч/б негатив. Уровень = доля прошедшего времени,
-  // край — вертикальная волна из пружин (алгоритм 2D-воды: пружины по закону Гука +
-  // несколько проходов передачи импульса соседям, как в anothrNick/2D-Water-Javascript-Demo).
-  var WATER = { K: 0.04, DAMP: 0.04, SPREAD: 0.08, PASSES: 2, N: 14 };
-  var waters = {};   // состояние по ключу события — переживает пересборку списка раз в 15 с
+  // «Вода» текущего события. Уровень = доля прошедшего времени.
+  // Край — как в capsule-render «waving»: два слоя, у каждого край из двух квадратичных
+  // кривых (Q + T), которые плавно перетекают между тремя формами за WAVE.DUR;
+  // второй слой сдвинут на полцикла. Основной слой — сплошной ч/б негатив,
+  // второй — полупрозрачная кромка там, где он выбегает дальше основного.
+  var WAVE = { DUR: 12000, AMP: 7, N: 18 };
+  var WAVE_KEYS = [   // [начало, контрольная, середина, конец] — формы из капсулы, нормированные к ±1
+    [[-1, .6, -.6, .4], [0, .6, -.2, -.6], [.8, -.4, .8, -.6]],
+    [[-.4, 1.4, .2, .6], [.2, -1, -1, -.2], [0, -.8, .2, .8]]
+  ];
+  var waters = {};   // уровень по ключу события — переживает пересборку списка раз в 15 с
   var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function liquid(start, end){
@@ -759,14 +775,10 @@
     el.dataset.e = toMinutes(end) * 60;
     var key = el.dataset.s + "-" + el.dataset.e;
     el.dataset.k = key;
-    el.innerHTML = "<i></i><i></i>";
-    if (!waters[key]){
-      var h = [], v = [];
-      for (var i = 0; i < WATER.N; i++){ h.push(0); v.push(0); }
-      waters[key] = { h: h, v: v, level: -1, target: 0, lastSplash: 0 };
-    }
+    el.innerHTML = '<i class="s"></i><i class="d"></i><i class="s g"></i><i class="d g"></i>';
+    if (!waters[key]) waters[key] = { level: -1, target: 0 };
     setLiquidLevel(el, new Date());
-    drawWater(el);
+    drawWater(el, reduceMotion ? 0 : performance.now());
     return el;
   }
   function setLiquidLevel(el, n){
@@ -781,70 +793,60 @@
     var n = new Date();
     Array.prototype.forEach.call(document.querySelectorAll(".liq"), function(el){
       setLiquidLevel(el, n);
-      if (reduceMotion) drawWater(el);
+      if (reduceMotion) drawWater(el, 0);
     });
   }
-  // один шаг пружинной модели
-  function stepWater(w){
-    var h = w.h, v = w.v, N = h.length, i, p;
-    for (i = 0; i < N; i++){ v[i] += -WATER.K * h[i] - WATER.DAMP * v[i]; h[i] += v[i]; }
-    var l = [], r = [];
-    for (p = 0; p < WATER.PASSES; p++){
-      for (i = 0; i < N; i++){
-        if (i > 0){ l[i] = WATER.SPREAD * (h[i] - h[i-1]); v[i-1] += l[i]; }
-        if (i < N-1){ r[i] = WATER.SPREAD * (h[i] - h[i+1]); v[i+1] += r[i]; }
-      }
-      for (i = 0; i < N; i++){
-        if (i > 0) h[i-1] += l[i];
-        if (i < N-1) h[i+1] += r[i];
-      }
-    }
+  function easeWave(x){ return x * x * x * (x * (x * 6 - 15) + 10); }   // мягкий разгон/торможение
+  // текущая форма края слоя: интерполяция между тремя ключевыми формами
+  function waveShape(layer, t){
+    var keys = WAVE_KEYS[layer];
+    var ph = ((t / WAVE.DUR + layer * 0.5) % 1) * 3, k = Math.floor(ph), f = easeWave(ph - k);
+    var a = keys[k], b = keys[(k + 1) % 3], out = [];
+    for (var i = 0; i < 4; i++) out.push(a[i] + (b[i] - a[i]) * f);
+    return out;
   }
-  function splash(w, idx, speed){
-    idx = Math.max(0, Math.min(w.h.length - 1, idx));
-    w.v[idx] += speed;
+  // смещение края на высоте u (0 — верх, 1 — низ): Q до середины, затем T (отражённая контрольная)
+  function waveAt(sh, u){
+    var s, p0, c, p1;
+    if (u <= 0.5){ s = u * 2; p0 = sh[0]; c = sh[1]; p1 = sh[2]; }
+    else { s = u * 2 - 1; p0 = sh[2]; c = 2 * sh[2] - sh[1]; p1 = sh[3]; }
+    return (1 - s) * (1 - s) * p0 + 2 * (1 - s) * s * c + s * s * p1;
   }
-  function drawWater(el){
+  function drawWater(el, t){
     var w = waters[el.dataset.k];
     if (!w) return;
     // уровень — в %, волна — в px поверх него (ширину строки знать не нужно)
-    var N = w.h.length, amp = w.level > 0 && w.level < 1 ? 1 : 0;
+    var amp = w.level > 0 && w.level < 1 ? WAVE.AMP : 0, N = WAVE.N;
     var base = (w.level * 100).toFixed(3) + "%";
-    var pts = ["0 0"];
+    var s1 = waveShape(0, t), s2 = waveShape(1, t);
+    function X(off){ return "clamp(0px, calc(" + base + " + " + off.toFixed(2) + "px), 100%)"; }
+    var main = ["0 0"], front = [], back = [];
     for (var i = 0; i < N; i++){
-      var x = "clamp(0px, calc(" + base + " + " + (amp * w.h[i]).toFixed(1) + "px), 100%)";
-      pts.push(x + " " + (i / (N - 1) * 100).toFixed(2) + "%");
+      var u = i / (N - 1), y = (u * 100).toFixed(2) + "%";
+      var e1 = amp * waveAt(s1, u), e2 = Math.max(e1, amp * waveAt(s2, u));
+      main.push(X(e1) + " " + y);
+      front.push(X(e1) + " " + y);
+      back.unshift(X(e2) + " " + y);
     }
-    pts.push("0 100%");
-    var poly = "polygon(" + pts.join(",") + ")";
-    Array.prototype.forEach.call(el.children, function(layer){ layer.style.clipPath = layer.style.webkitClipPath = poly; });
+    main.push("0 100%");
+    var mainPoly = "polygon(" + main.join(",") + ")";
+    var ghostPoly = "polygon(" + front.concat(back).join(",") + ")";   // полоса между краями
+    var L = el.children;
+    L[0].style.clipPath = L[0].style.webkitClipPath = mainPoly;
+    L[1].style.clipPath = L[1].style.webkitClipPath = mainPoly;
+    L[2].style.clipPath = L[2].style.webkitClipPath = ghostPoly;
+    L[3].style.clipPath = L[3].style.webkitClipPath = ghostPoly;
   }
   function waterFrame(t){
-    var list = document.querySelectorAll(".liq");
-    Array.prototype.forEach.call(list, function(el){
+    Array.prototype.forEach.call(document.querySelectorAll(".liq"), function(el){
       var w = waters[el.dataset.k];
       if (!w) return;
-      w.level += (w.target - w.level) * 0.06;            // плавный подъём уровня
-      if (t - w.lastSplash > 350 + Math.random() * 500){ // случайные «капли», как в демо
-        w.lastSplash = t;
-        splash(w, Math.floor(Math.random() * w.h.length), (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6));
-      }
-      stepWater(w);
-      drawWater(el);
+      w.level += (w.target - w.level) * 0.06;   // плавный подъём уровня
+      drawWater(el, t);
     });
     requestAnimationFrame(waterFrame);
   }
-  if (!reduceMotion){
-    requestAnimationFrame(waterFrame);
-    // тап по текущей паре — всплеск в месте касания
-    document.addEventListener("pointerdown", function(e){
-      var host = e.target.closest && e.target.closest(".row.active, .brk.active");
-      var el = host && host.querySelector(".liq");
-      if (!el) return;
-      var r = host.getBoundingClientRect(), w = waters[el.dataset.k];
-      splash(w, Math.round((e.clientY - r.top) / r.height * (w.h.length - 1)), 14);
-    });
-  }
+  if (!reduceMotion) requestAnimationFrame(waterFrame);
   // каждую секунду — жидкость, часы и карточка «Сейчас» (раньше отставали до 15 с);
   // полная перерисовка списка — раз в 15 с
   setInterval(function(){
