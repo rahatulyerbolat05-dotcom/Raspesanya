@@ -146,6 +146,15 @@
   .glassy > button{position:relative; z-index:1;}
   .seg.glassy button.active{background:transparent; box-shadow:none;}
   .daytabs.glassy button.active{background:transparent; border-color:transparent;}
+  /* белый текст — только когда капля долетела (класс .lit ставит JS), иначе цифра пропадает на лету */
+  .daytabs.glassy button.active:not(.lit), .daytabs.glassy button.active:not(.lit) .n{color:var(--text);}
+  /* в полёте синяя капля идёт ПОВЕРХ карточек дней прозрачным стеклом, при посадке уходит под кнопку */
+  .daytabs .gthumb.flying{
+    z-index:2;
+    background:linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,255,255,0.04) 60%), rgba(10,132,255,0.55);
+    -webkit-backdrop-filter:saturate(1.7) brightness(1.05); backdrop-filter:saturate(1.7) brightness(1.05);
+    box-shadow:0 6px 18px rgba(10,132,255,0.35), inset 0 1px 1px rgba(255,255,255,0.8), inset 0 -1px 2px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.3);
+  }
   .gthumb{
     position:absolute; left:0; top:0; width:0; height:0; z-index:0; pointer-events:none;
     border-radius:7px; background:var(--card-solid);
@@ -405,7 +414,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-10-01g"></script>
+<script src="schedule-data.js?v=2026-10-01h"></script>
 <script>
 (function(){
   "use strict";
@@ -1046,7 +1055,11 @@
       th.style.opacity = "";
       var to = geom(btn), from = group._last, same = btn === group._lastBtn;
       group._last = to; group._lastBtn = btn;
-      if (snap || still || !from || same || !th.animate){ place(th, to); return; }
+      if (snap || still || !from || same || !th.animate){
+        place(th, to);
+        if (!group._gliding) land(group, btn);   // наши же смены классов в полёте сюда тоже приходят
+        return;
+      }
       // перетекание: передний край убегает вперёд, задний догоняет; при посадке — сплющивание и дрожь
       var dir = to.l > from.l ? 1 : -1, dist = Math.abs(to.l - from.l);
       var lead = Math.min(dist * 0.35, 40), fR = from.l + from.w, tR = to.l + to.w;
@@ -1062,7 +1075,18 @@
         kf(to.l, to.w, 1, 1, 1)
       ], { duration: 600, easing: "linear" });
       anim.id = "glide";
+      group._gliding = true;
+      Array.prototype.forEach.call(group.querySelectorAll("button.lit"), function(b){ b.classList.remove("lit"); });
+      if (group.id === "dayTabs") th.classList.add("flying");
+      anim.onfinish = function(){ group._gliding = false; land(group, btn); };
+      anim.oncancel = function(){ if (group._lastBtn === btn) group._gliding = false; };
       place(th, to);
+    }
+    // посадка: капля уходит под кнопку, текст кнопки становится «на капле»
+    function land(group, btn){
+      group._thumb.classList.remove("flying");
+      Array.prototype.forEach.call(group.querySelectorAll("button.lit"), function(b){ if (b !== btn) b.classList.remove("lit"); });
+      btn.classList.add("lit");
     }
     groups.forEach(function(group){
       if (!group) return;
