@@ -205,17 +205,15 @@
   .row{display:flex; gap:12px; padding:14px 16px; border-bottom:1px solid var(--sep); align-items:flex-start; position:relative; overflow:hidden;}
   .brk{position:relative; overflow:hidden;}
 
-  /* прогресс текущей пары/перемены — «жидкость», инвертирующая цвета под собой */
-  .liq{position:absolute; top:0; bottom:0; left:0; width:0; display:flex; pointer-events:none; mix-blend-mode:difference;
-       transition:width 1s linear;}
-  .liq b{flex:1; background:#fff;}
-  .liq i{flex:none; width:10px; margin-left:-1px;
-         background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='24' viewBox='0 0 10 24'%3E%3Cpath d='M0 0H4C9 6 9 6 4 12S-1 18 4 24H0Z' fill='%23fff'/%3E%3C/svg%3E") repeat-y;
-         animation:liqWave 1.4s linear infinite;}
-  .liq::after{content:""; position:absolute; top:0; bottom:0; right:10px; width:18px;
-         background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.35)); animation:liqShine 2.2s ease-in-out infinite;}
-  @keyframes liqWave{ from{background-position:0 0;} to{background-position:0 24px;} }
-  @keyframes liqShine{ 0%,100%{opacity:.4;} 50%{opacity:1;} }
+  /* прогресс текущей пары/перемены — «вода»: всё под ней становится ч/б негативом.
+     Два слоя: серый в режиме saturation обесцвечивает, белый в режиме difference инвертирует.
+     Форму края (волну) задаёт clip-path, который каждый кадр пересчитывает пружинная модель
+     (backdrop-filter тут не годится — браузеры режут его прямоугольником, волна пропадает). */
+  .liq{position:absolute; inset:0; pointer-events:none;}
+  .liq i{position:absolute; inset:0; clip-path:inset(0 100% 0 0);}
+  .liq i:first-child{background:#808080; mix-blend-mode:saturation;}
+  .liq i + i{background:#fff; mix-blend-mode:difference;}
+  .row.active, .brk.active{cursor:pointer;}
   .row:last-child{border-bottom:none;}
   .row.active{background:rgba(10,132,255,0.08);}
   .row .time{width:60px; flex:none; font-size:11.5px; font-weight:var(--fw-c); color:var(--text2); font-variant-numeric:tabular-nums; line-height:1.5; padding-top:2px;}
@@ -364,7 +362,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-10-01"></script>
+<script src="schedule-data.js?v=2026-10-01c"></script>
 <script>
 (function(){
   "use strict";
@@ -403,6 +401,34 @@
   function roomTag(r){ return '<span class="room-tag'+(/^\d+$/.test(r) ? ' num' : '')+'">'+r+'</span>'; }
   function fmtDur(m){ var h = Math.floor(m/60), r = m%60; return h ? h+' ч'+(r ? ' '+r+' мин' : '') : m+' мин'; }
   function annFor(d){ return (typeof ANNOUNCEMENTS !== "undefined" && ANNOUNCEMENTS[dateKey(d)]) || null; }
+  // Замена дня: разовое событие (OVERRIDES) или период без пар (PERIODS: практика, сессия, каникулы)
+  function overrideFor(d){
+    var key = dateKey(d);
+    if (OVERRIDES[key]) return OVERRIDES[key];
+    if (typeof PERIODS !== "undefined"){
+      for (var i=0;i<PERIODS.length;i++){ if (key >= PERIODS[i].from && key <= PERIODS[i].to) return PERIODS[i]; }
+    }
+    return null;
+  }
+  function overrideText(o){
+    return '<b>'+o.title+'</b>' + (o.time ? ', '+o.time : '') + (o.place ? ', '+o.place : '') + (o.note ? ' — '+o.note : '');
+  }
+  // Ближайший учебный день после d (для подсказки «следующие пары — …»)
+  function nextStudyDay(d){
+    for (var i=1; i<=90; i++){
+      var x = new Date(d.getFullYear(), d.getMonth(), d.getDate()+i);
+      var ix = (x.getDay()+6)%7;
+      if (ix > 5 || overrideFor(x)) continue;
+      if (dayInfo(ix, weekType(x)).length) return x;
+    }
+    return null;
+  }
+  function nextStudyText(d){
+    var x = nextStudyDay(d); if (!x) return "";
+    var diff = Math.round((atMidnight(x) - atMidnight(d)) / 86400000);
+    var when = diff === 1 ? "завтра" : ["в воскресенье","в понедельник","во вторник","в среду","в четверг","в пятницу","в субботу"][x.getDay()] + (diff > 6 ? ", " + x.getDate() + " " + MONTHS_GEN[x.getMonth()] : "");
+    return "Следующие пары — " + when + ".";
+  }
   function roomFor(c, d){ var a = annFor(d); return a && a.remote ? "дистант" : (c.room2||c.room); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
   function toMinutes(hhmm){ var p=hhmm.split(":"); return (+p[0])*60 + (+p[1]); }
@@ -472,9 +498,8 @@
       a.setAttribute("aria-label", dir < 0 ? "Предыдущая неделя" : "Следующая неделя");
       a.innerHTML = "<i></i>";
       a.addEventListener("click", function(){
-        var s = state.selectedDate;
-        var d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7*dir);
-        if (!inCalendarRange(d)) return;
+        var d = weekTarget(state.selectedDate, dir);
+        if (!d) return;
         state.selectedDate = d;
         state.followToday = false;
         renderAll();
@@ -508,8 +533,17 @@
       entry.btn.classList.toggle("today", sameDate(entry.date, now));
       entry.btn.classList.toggle("active", sameDate(entry.date, selDate));
     });
-    wrap._prev.disabled = !inCalendarRange(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate() - 7));
-    wrap._next.disabled = !inCalendarRange(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate() + 7));
+    wrap._prev.disabled = !weekTarget(selDate, -1);
+    wrap._next.disabled = !weekTarget(selDate, 1);
+  }
+  // Тот же день соседней недели; у краёв календаря — ближайший допустимый день той недели
+  // (например, с пн 07.09 назад — на вт 01.09). null — если соседняя неделя целиком вне диапазона.
+  function weekTarget(s, dir){
+    var d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7*dir);
+    if (inCalendarRange(d)) return d;
+    var edge = dir < 0 ? CALENDAR_MIN : CALENDAR_MAX;
+    var mon = function(x){ return atMidnight(new Date(x.getFullYear(), x.getMonth(), x.getDate() - (x.getDay()+6)%7)).getTime(); };
+    return mon(edge) === mon(d) ? new Date(edge.getFullYear(), edge.getMonth(), edge.getDate()) : null;
   }
   function renderLegend(selDate){
     var wt = effectiveWeekType(selDate);
@@ -534,10 +568,11 @@
 
   function findCurrentAndNext(now){
     var idx = (now.getDay()+6)%7;
+    var ov = overrideFor(now);
+    if (ov) return {kind:"override", data:ov};
     if (idx > 5) return {kind:"weekend"};
-    var todayKey = dateKey(now);
-    if (OVERRIDES[todayKey]) return {kind:"override", data:OVERRIDES[todayKey]};
-    var wt = effectiveWeekType(now);
+    // «Сейчас» всегда по реальной неделе: ручной переключатель Числ./Знам. — только для просмотра
+    var wt = weekType(now);
     var list = dayInfo(idx, wt);
     if (!list.length) return {kind:"empty", dayIdx:idx};
     var grid = idx === 5 ? SAT_PAIRS : PAIRS;
@@ -569,15 +604,15 @@
       v.event = true;
       v.label = "Сегодня"; v.status = "Событие"; v.statusClass = "status soon";
       v.subject = res.data.title;
-      v.metaHTML = '<span class="metaitem">'+res.data.time+'</span><span class="room-tag">'+res.data.place+'</span>';
-      v.countdownHTML = res.data.note;
+      v.metaHTML = (res.data.time ? '<span class="metaitem">'+res.data.time+'</span>' : '') + (res.data.place ? '<span class="room-tag">'+res.data.place+'</span>' : '');
+      v.countdownHTML = [res.data.note || "", res.data.from ? nextStudyText(now) : ""].filter(Boolean).join(" ");
     } else if (res.kind === "weekend"){
       v.label = "Сегодня"; v.status = "Выходной"; v.statusClass = "status off";
-      v.subject = "Пар нет"; v.countdownHTML = "Следующая пара — в понедельник.";
+      v.subject = "Пар нет"; v.countdownHTML = nextStudyText(now);
     } else if (res.kind === "empty"){
       v.label = "Сегодня"; v.status = "Пар нет"; v.statusClass = "status off";
       v.subject = "Занятий не запланировано";
-      v.countdownHTML = (SCHEDULE[res.dayIdx] && SCHEDULE[res.dayIdx].note) || "";
+      v.countdownHTML = nextStudyText(now);
     } else if (res.current){
       v.label = "Сейчас идёт"; v.status = "Идёт"; v.statusClass = "status live";
       v.subject = res.current.c.name;
@@ -603,6 +638,7 @@
     } else {
       v.label = "Сегодня"; v.status = "Пар больше нет"; v.statusClass = "status off";
       v.subject = "Занятия на сегодня закончились";
+      v.countdownHTML = nextStudyText(now);
     }
 
     function apply(){
@@ -632,7 +668,7 @@
   function renderDayList(now, selDate){
     var idx = (selDate.getDay()+6)%7;
     var selKey = dateKey(selDate);
-    var override = OVERRIDES[selKey];
+    var override = overrideFor(selDate);
     var wt = effectiveWeekType(selDate);
     var noteEl = document.getElementById("dayNote");
     var wrap = document.getElementById("dayList");
@@ -655,7 +691,7 @@
       var row2 = document.createElement("div");
       row2.className = "daynote";
       row2.hidden = false;
-      row2.innerHTML = '<span class="tag">Вместо пар</span><span><b>'+override.title+'</b>, '+override.time+', '+override.place+(override.note ? ' — '+override.note : '')+'</span>';
+      row2.innerHTML = '<span class="tag">Вместо пар</span><span>'+overrideText(override)+'</span>';
       wrap.appendChild(row2);
       return;
     }
@@ -707,32 +743,117 @@
     tickLiquid();
   }
 
-  // «Жидкость» текущего события: слой поверх строки с mix-blend-mode: difference,
-  // поэтому всё под ним инвертируется. Ширина = доля прошедшего времени.
+  // «Вода» текущего события: два слоя поверх строки (saturation + difference) —
+  // всё под ним превращается в ч/б негатив. Уровень = доля прошедшего времени,
+  // край — вертикальная волна из пружин (алгоритм 2D-воды: пружины по закону Гука +
+  // несколько проходов передачи импульса соседям, как в anothrNick/2D-Water-Javascript-Demo).
+  var WATER = { K: 0.04, DAMP: 0.04, SPREAD: 0.08, PASSES: 2, N: 14 };
+  var waters = {};   // состояние по ключу события — переживает пересборку списка раз в 15 с
+  var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   function liquid(start, end){
     var el = document.createElement("div");
     el.className = "liq";
     el.setAttribute("aria-hidden", "true");
     el.dataset.s = toMinutes(start) * 60;
     el.dataset.e = toMinutes(end) * 60;
-    el.innerHTML = "<b></b><i></i>";
-    // список пересобирается раз в 15 с — ставим ширину сразу (без анимации с нуля)
-    // и сдвигаем фазу волны по часам, чтобы она не «прыгала» при пересборке
-    setLiquidWidth(el, new Date());
-    el.querySelector("i").style.animationDelay = -(Date.now() % 1400) + "ms";
+    var key = el.dataset.s + "-" + el.dataset.e;
+    el.dataset.k = key;
+    el.innerHTML = "<i></i><i></i>";
+    if (!waters[key]){
+      var h = [], v = [];
+      for (var i = 0; i < WATER.N; i++){ h.push(0); v.push(0); }
+      waters[key] = { h: h, v: v, level: -1, target: 0, lastSplash: 0 };
+    }
+    setLiquidLevel(el, new Date());
+    drawWater(el);
     return el;
   }
-  function setLiquidWidth(el, n){
+  function setLiquidLevel(el, n){
     var sec = n.getHours()*3600 + n.getMinutes()*60 + n.getSeconds();
     var s = +el.dataset.s, e = +el.dataset.e;
-    var p = Math.max(0, Math.min(1, (sec - s) / (e - s)));
-    el.style.width = "calc(" + (p * 100).toFixed(3) + "% + 10px)";
+    var w = waters[el.dataset.k];
+    if (!w) return;
+    w.target = Math.max(0, Math.min(1, (sec - s) / (e - s)));
+    if (w.level < 0 || reduceMotion) w.level = w.target;   // первый кадр — сразу на место
   }
   function tickLiquid(){
     var n = new Date();
-    Array.prototype.forEach.call(document.querySelectorAll(".liq"), function(el){ setLiquidWidth(el, n); });
+    Array.prototype.forEach.call(document.querySelectorAll(".liq"), function(el){
+      setLiquidLevel(el, n);
+      if (reduceMotion) drawWater(el);
+    });
   }
-  setInterval(tickLiquid, 1000);
+  // один шаг пружинной модели
+  function stepWater(w){
+    var h = w.h, v = w.v, N = h.length, i, p;
+    for (i = 0; i < N; i++){ v[i] += -WATER.K * h[i] - WATER.DAMP * v[i]; h[i] += v[i]; }
+    var l = [], r = [];
+    for (p = 0; p < WATER.PASSES; p++){
+      for (i = 0; i < N; i++){
+        if (i > 0){ l[i] = WATER.SPREAD * (h[i] - h[i-1]); v[i-1] += l[i]; }
+        if (i < N-1){ r[i] = WATER.SPREAD * (h[i] - h[i+1]); v[i+1] += r[i]; }
+      }
+      for (i = 0; i < N; i++){
+        if (i > 0) h[i-1] += l[i];
+        if (i < N-1) h[i+1] += r[i];
+      }
+    }
+  }
+  function splash(w, idx, speed){
+    idx = Math.max(0, Math.min(w.h.length - 1, idx));
+    w.v[idx] += speed;
+  }
+  function drawWater(el){
+    var w = waters[el.dataset.k];
+    if (!w) return;
+    // уровень — в %, волна — в px поверх него (ширину строки знать не нужно)
+    var N = w.h.length, amp = w.level > 0 && w.level < 1 ? 1 : 0;
+    var base = (w.level * 100).toFixed(3) + "%";
+    var pts = ["0 0"];
+    for (var i = 0; i < N; i++){
+      var x = "clamp(0px, calc(" + base + " + " + (amp * w.h[i]).toFixed(1) + "px), 100%)";
+      pts.push(x + " " + (i / (N - 1) * 100).toFixed(2) + "%");
+    }
+    pts.push("0 100%");
+    var poly = "polygon(" + pts.join(",") + ")";
+    Array.prototype.forEach.call(el.children, function(layer){ layer.style.clipPath = layer.style.webkitClipPath = poly; });
+  }
+  function waterFrame(t){
+    var list = document.querySelectorAll(".liq");
+    Array.prototype.forEach.call(list, function(el){
+      var w = waters[el.dataset.k];
+      if (!w) return;
+      w.level += (w.target - w.level) * 0.06;            // плавный подъём уровня
+      if (t - w.lastSplash > 350 + Math.random() * 500){ // случайные «капли», как в демо
+        w.lastSplash = t;
+        splash(w, Math.floor(Math.random() * w.h.length), (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6));
+      }
+      stepWater(w);
+      drawWater(el);
+    });
+    requestAnimationFrame(waterFrame);
+  }
+  if (!reduceMotion){
+    requestAnimationFrame(waterFrame);
+    // тап по текущей паре — всплеск в месте касания
+    document.addEventListener("pointerdown", function(e){
+      var host = e.target.closest && e.target.closest(".row.active, .brk.active");
+      var el = host && host.querySelector(".liq");
+      if (!el) return;
+      var r = host.getBoundingClientRect(), w = waters[el.dataset.k];
+      splash(w, Math.round((e.clientY - r.top) / r.height * (w.h.length - 1)), 14);
+    });
+  }
+  // каждую секунду — жидкость, часы и карточка «Сейчас» (раньше отставали до 15 с);
+  // полная перерисовка списка — раз в 15 с
+  setInterval(function(){
+    tickLiquid();
+    if (!state.selectedDate) return;
+    var n = new Date();
+    renderClock(n);
+    renderHero(n);
+  }, 1000);
 
   var MONTHS_RU = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 
@@ -765,7 +886,7 @@
         if (wd >= 5) btn.classList.add("weekend");
         if (sameDate(d, now)) btn.classList.add("today");
         if (sameDate(d, state.selectedDate)) btn.classList.add("selected");
-        var hasEvent = !!OVERRIDES[dateKey(d)] || !!annFor(d);
+        var hasEvent = !!overrideFor(d) || !!annFor(d);
         var disabled = !inCalendarRange(d);
         if (disabled) btn.classList.add("disabled");
         btn.innerHTML = String(day) + (hasEvent ? '<span class="evd"></span>' : '');
@@ -821,7 +942,11 @@
     // followToday=true (по умолчанию, пока пользователь сам не выбрал день) —
     // держим selectedDate синхронным с реальной датой. Раньше день выбирался
     // один раз и "залипал", если оставить вкладку открытой через полночь.
-    if (state.selectedDate === null || state.followToday) state.selectedDate = atMidnight(now);
+    if (state.selectedDate === null || state.followToday){
+      state.selectedDate = atMidnight(now);
+      // в воскресенье пар нет, а во вкладках только Пн–Сб — сразу показываем понедельник
+      if (now.getDay() === 0) state.selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    }
     if (state.calMonth === null) state.calMonth = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
     var selDate = state.selectedDate;
 
@@ -879,6 +1004,12 @@
     }
   });
   function navMonth(dir){
+    // защита от быстрого двойного клика: не уходим за пределы календаря
+    var target = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth()+dir, 1);
+    if (target < new Date(CALENDAR_MIN.getFullYear(), CALENDAR_MIN.getMonth(), 1) ||
+        target > new Date(CALENDAR_MAX.getFullYear(), CALENDAR_MAX.getMonth(), 1) || navMonth.busy) return;
+    navMonth.busy = true;
+    setTimeout(function(){ navMonth.busy = false; }, 120);
     var g = document.getElementById("calGrid");
     g.style.transition = "opacity 110ms ease, transform 110ms ease";
     g.style.opacity = "0";
