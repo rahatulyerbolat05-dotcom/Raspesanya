@@ -157,10 +157,10 @@
   }
   .room-tag.num::before{content:"АУД"; font-size:9px; font-weight:700; letter-spacing:0.06em; opacity:0.55;}
 
-  .daytabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
+  .daytabs{display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
   .daytabs::-webkit-scrollbar{display:none;}
   .daytabs button{
-    flex:1; min-width:44px; appearance:none; border:1px solid var(--sep); background:var(--card);
+    flex:1; min-width:38px; appearance:none; border:1px solid var(--sep); background:var(--card);
     backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
     color:var(--text); font-family:inherit; font-size:var(--fs-c); font-weight:var(--fw-c); letter-spacing:var(--ls-c);
     padding:10px 0; border-radius:14px; cursor:pointer; text-align:center;
@@ -169,6 +169,23 @@
   .daytabs button.today{border-color:var(--accent);}
   .daytabs button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
   .daytabs button.active .n{color:#fff;}
+  /* стрелки недели — половина ширины кнопки дня */
+  .daytabs button.wk{flex:0.5; min-width:19px; padding:0; display:flex; align-items:center; justify-content:center; color:var(--text2);}
+  .daytabs button.wk i{display:block; width:8px; height:8px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; border-radius:1px;}
+  .daytabs button.wk.prev i{transform:rotate(135deg); margin-left:3px;}
+  .daytabs button.wk.next i{transform:rotate(-45deg); margin-right:3px;}
+  .daytabs button.wk:not(:disabled):hover{color:var(--accent); border-color:var(--accent);}
+  .daytabs button.wk:not(:disabled):active{transform:scale(0.9);}
+  .daytabs button.wk:disabled{opacity:0.3; cursor:default;}
+
+  /* перемена между парами */
+  .brk{display:flex; gap:12px; align-items:center; padding:6px 16px; border-bottom:1px solid var(--sep); font-size:11px; font-weight:var(--fw-c); letter-spacing:var(--ls-c); color:var(--text3); font-variant-numeric:tabular-nums; background:rgba(118,118,128,0.05);}
+  .brk .bt{min-width:60px; flex:none; white-space:nowrap;}
+  .brk .bl{flex:1; border-top:1px dashed var(--sep);}
+  .brk .bn{flex:none; font-weight:600; font-size:var(--fs-eyebrow); letter-spacing:0.06em; text-transform:uppercase;}
+  .brk.gap .bn{color:var(--text2);}
+  .brk.active{color:var(--warn); background:var(--warn-bg);}
+  .brk.active .bl{border-top-color:var(--warn);}
 
   .card{
     background:var(--card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
@@ -356,6 +373,9 @@
   }
 
   function roomTag(r){ return '<span class="room-tag'+(/^\d+$/.test(r) ? ' num' : '')+'">'+r+'</span>'; }
+  function fmtDur(m){ var h = Math.floor(m/60), r = m%60; return h ? h+' ч'+(r ? ' '+r+' мин' : '') : m+' мин'; }
+  function annFor(d){ return (typeof ANNOUNCEMENTS !== "undefined" && ANNOUNCEMENTS[dateKey(d)]) || null; }
+  function roomFor(c, d){ var a = annFor(d); return a && a.remote ? "дистант" : (c.room2||c.room); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
   function toMinutes(hhmm){ var p=hhmm.split(":"); return (+p[0])*60 + (+p[1]); }
   function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -418,10 +438,27 @@
     // Пересоздаём кнопки только когда реально сменилась неделя — иначе просто
     // переключаем классы на тех же узлах, чтобы CSS-переход подсветки работал
     // (на пересозданных с нуля узлах transition не проигрывается).
+    function weekArrow(dir){
+      var a = document.createElement("button");
+      a.className = "wk " + (dir < 0 ? "prev" : "next");
+      a.setAttribute("aria-label", dir < 0 ? "Предыдущая неделя" : "Следующая неделя");
+      a.innerHTML = "<i></i>";
+      a.addEventListener("click", function(){
+        var s = state.selectedDate;
+        var d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7*dir);
+        if (!inCalendarRange(d)) return;
+        state.selectedDate = d;
+        state.followToday = false;
+        renderAll();
+      });
+      return a;
+    }
     if (wrap.dataset.mondayKey !== mondayKey){
       wrap.innerHTML = "";
       wrap.dataset.mondayKey = mondayKey;
       wrap._days = [];
+      wrap._prev = weekArrow(-1);
+      wrap.appendChild(wrap._prev);
       for (var i=0;i<6;i++){
         (function(i){
           var d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+i);
@@ -436,11 +473,15 @@
           wrap._days.push({date:d, btn:b});
         })(i);
       }
+      wrap._next = weekArrow(1);
+      wrap.appendChild(wrap._next);
     }
     wrap._days.forEach(function(entry){
       entry.btn.classList.toggle("today", sameDate(entry.date, now));
       entry.btn.classList.toggle("active", sameDate(entry.date, selDate));
     });
+    wrap._prev.disabled = !inCalendarRange(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate() - 7));
+    wrap._next.disabled = !inCalendarRange(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate() + 7));
   }
   function renderLegend(selDate){
     var wt = effectiveWeekType(selDate);
@@ -471,15 +512,16 @@
     if (!list.length) return {kind:"empty", dayIdx:idx};
     var grid = idx === 5 ? SAT_PAIRS : PAIRS;
     var nowMin = now.getHours()*60 + now.getMinutes();
-    var current = null, next = null;
+    var current = null, next = null, prev = null;
     for (var i=0;i<list.length;i++){
       var p = grid.filter(function(g){ return g.n === list[i].pair; })[0];
       if (!p) continue;
       var s = toMinutes(p.start), e = toMinutes(p.end);
       if (nowMin >= s && nowMin < e){ current = {c:list[i], p:p}; }
       if (nowMin < s && !next){ next = {c:list[i], p:p}; }
+      if (nowMin >= e){ prev = {c:list[i], p:p}; }
     }
-    return {kind:"day", current:current, next:next, dayIdx:idx};
+    return {kind:"day", current:current, next:next, prev:prev, dayIdx:idx};
   }
 
   function renderHero(now){
@@ -509,18 +551,25 @@
     } else if (res.current){
       v.label = "Сейчас идёт"; v.status = "Идёт"; v.statusClass = "status live";
       v.subject = res.current.c.name;
-      v.metaHTML = '<span class="metaitem">'+res.current.c.teacher+'</span>'+roomTag(res.current.c.room2||res.current.c.room)+'';
+      v.metaHTML = '<span class="metaitem">'+res.current.c.teacher+'</span>'+roomTag(roomFor(res.current.c, now))+'';
       var endMin = toMinutes(res.current.p.end);
       var left = endMin - (now.getHours()*60+now.getMinutes());
       v.countdownHTML = 'До конца пары — <b>'+left+' мин</b> (до '+res.current.p.end+')';
     } else if (res.next){
-      v.label = "Следующая пара";
       var startMin = toMinutes(res.next.p.start);
       var left2 = startMin - (now.getHours()*60+now.getMinutes());
-      v.status = left2 <= 20 ? "Скоро" : "Позже"; v.statusClass = left2 <= 20 ? "status soon" : "status off";
       v.subject = res.next.c.name;
-      v.metaHTML = '<span class="metaitem">'+res.next.c.teacher+'</span>'+roomTag(res.next.c.room2||res.next.c.room)+'';
-      v.countdownHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+left2+' мин';
+      v.metaHTML = '<span class="metaitem">'+res.next.c.teacher+'</span>'+roomTag(roomFor(res.next.c, now))+'';
+      if (res.prev){
+        // между парами: перемена (или окно, если пары идут не подряд)
+        var isGap = res.next.p.n - res.prev.p.n > 1;
+        v.label = "Дальше"; v.status = isGap ? "Окно" : "Перемена"; v.statusClass = "status soon";
+        v.countdownHTML = (isGap ? 'Окно' : 'Перемена') + ' до <b>'+res.next.p.start+'</b> — ещё '+fmtDur(left2);
+      } else {
+        v.label = "Следующая пара";
+        v.status = left2 <= 20 ? "Скоро" : "Позже"; v.statusClass = left2 <= 20 ? "status soon" : "status off";
+        v.countdownHTML = 'Начало в <b>'+res.next.p.start+'</b> — через '+fmtDur(left2);
+      }
     } else {
       v.label = "Сегодня"; v.status = "Пар больше нет"; v.statusClass = "status off";
       v.subject = "Занятия на сегодня закончились";
@@ -587,11 +636,30 @@
       wrap.appendChild(e); return;
     }
 
+    var announce = annFor(selDate);
+    if (announce){
+      var an = document.createElement("div");
+      an.className = "daynote";
+      an.innerHTML = '<span class="tag">Объявление</span><span><b>'+announce.title+'</b>'+(announce.note ? ' — '+announce.note : '')+'</span>';
+      wrap.appendChild(an);
+    }
+
     var isToday = sameDate(selDate, now);
     var nowMin = now.getHours()*60+now.getMinutes();
 
+    var prevP = null;
     list.forEach(function(c){
       var p = grid.filter(function(g){ return g.n === c.pair; })[0];
+      if (prevP && p){
+        // перемена только МЕЖДУ парами: от конца предыдущей до начала этой
+        var bs = toMinutes(prevP.end), be = toMinutes(p.start), isGap = p.n - prevP.n > 1;
+        var br = document.createElement("div");
+        br.className = "brk" + (isGap ? " gap" : "") + (isToday && nowMin >= bs && nowMin < be ? " active" : "");
+        br.innerHTML = '<span class="bt">'+prevP.end+'–'+p.start+'</span><span class="bl"></span>' +
+          '<span class="bn">'+(isGap ? 'Окно' : 'Перемена')+' · '+fmtDur(be - bs)+'</span>';
+        wrap.appendChild(br);
+      }
+      if (p) prevP = p;
       var row = document.createElement("div");
       row.className = "row";
       var isNowActive = isToday && p && nowMin >= toMinutes(p.start) && nowMin < toMinutes(p.end);
@@ -601,7 +669,7 @@
         '<div class="time">'+ (p? p.start : "?") +'<b>'+ (p? p.end : "") +'</b></div>' +
         '<div class="stripe" style="background:'+colorFor(c.name)+'"></div>' +
         '<div class="body"><div class="subj">'+c.name+splitTag+'</div>' +
-          '<div class="sub"><span>'+c.teacher+'</span>'+roomTag(c.room2||c.room)+'</div></div>';
+          '<div class="sub"><span>'+c.teacher+'</span>'+roomTag(roomFor(c, selDate))+'</div></div>';
       wrap.appendChild(row);
     });
   }
@@ -637,7 +705,7 @@
         if (wd >= 5) btn.classList.add("weekend");
         if (sameDate(d, now)) btn.classList.add("today");
         if (sameDate(d, state.selectedDate)) btn.classList.add("selected");
-        var hasEvent = !!OVERRIDES[dateKey(d)];
+        var hasEvent = !!OVERRIDES[dateKey(d)] || !!annFor(d);
         var disabled = !inCalendarRange(d);
         if (disabled) btn.classList.add("disabled");
         btn.innerHTML = String(day) + (hasEvent ? '<span class="evd"></span>' : '');
