@@ -138,6 +138,38 @@
   }
   .seg button.active{background:var(--card-solid); box-shadow:0 1px 3px rgba(0,0,0,0.15);}
 
+  /* «Жидкое стекло» (по мотивам iOS 26 Liquid Glass, GetStream/awesome-liquid-glass):
+     подсветка выбранной кнопки — отдельная капля .gthumb под кнопками. При переключении
+     она перетекает к новой кнопке (тянется в полёте, сплющивается при посадке, дрожит как желе),
+     при нажатии раздувается в прозрачную стеклянную линзу. Включается классом .glassy (JS). */
+  .glassy{position:relative;}
+  .glassy > button{position:relative; z-index:1;}
+  .seg.glassy button.active{background:transparent; box-shadow:none;}
+  .daytabs.glassy button.active{background:transparent; border-color:transparent;}
+  .gthumb{
+    position:absolute; left:0; top:0; width:0; height:0; z-index:0; pointer-events:none;
+    border-radius:7px; background:var(--card-solid);
+    box-shadow:0 1px 3px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.65), inset 0 0 0 0.5px rgba(255,255,255,0.35);
+    transition:scale 0.32s cubic-bezier(.3,1.7,.5,1), background-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+  }
+  .daytabs .gthumb{
+    border-radius:14px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0) 55%), var(--accent);
+    box-shadow:0 4px 14px rgba(10,132,255,0.35), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 1px rgba(0,0,0,0.12);
+  }
+  /* линза: нажали и держим — капля раздувается и становится прозрачным стеклом */
+  .gthumb.lens{
+    scale:1.12 1.22;
+    background:rgba(255,255,255,0.28);
+    -webkit-backdrop-filter:blur(1.5px) saturate(1.8) brightness(1.08); backdrop-filter:blur(1.5px) saturate(1.8) brightness(1.08);
+    box-shadow:0 8px 22px rgba(0,0,0,0.18), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 2px rgba(0,0,0,0.10), inset 0 0 0 1px rgba(255,255,255,0.45);
+  }
+  .daytabs .gthumb.lens{
+    scale:1.08 1.1;
+    background:linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0.05) 60%), rgba(10,132,255,0.55);
+  }
+  @media (prefers-reduced-motion: reduce){ .gthumb{transition:none;} .gthumb.lens{scale:none;} }
+
   .hero{
     background:var(--card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
     border:1px solid var(--sep); border-radius:22px; padding:20px; box-shadow:var(--shadow);
@@ -373,7 +405,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-10-01f"></script>
+<script src="schedule-data.js?v=2026-10-01g"></script>
 <script>
 (function(){
   "use strict";
@@ -993,6 +1025,75 @@
     else document.documentElement.removeAttribute("data-theme");
     try { localStorage.setItem('scheduleTheme', t); } catch(e){}
   });
+
+  // ---- «Жидкое стекло» у переключателей (темы, неделя, дни) ----
+  // Капля-подсветка живёт под кнопками и следит за классом .active через MutationObserver,
+  // поэтому остальной код ничего о ней не знает.
+  (function liquidGlass(){
+    var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var groups = [document.getElementById("themeSeg"), document.getElementById("weekSeg"), document.getElementById("dayTabs")];
+
+    function geom(b){ return { l: b.offsetLeft, t: b.offsetTop, w: b.offsetWidth, h: b.offsetHeight }; }
+    function place(th, g){
+      th.style.left = g.l + "px"; th.style.top = g.t + "px";
+      th.style.width = g.w + "px"; th.style.height = g.h + "px";
+    }
+    function update(group, snap){
+      var th = group._thumb;
+      if (th.parentNode !== group) group.insertBefore(th, group.firstChild);   // дни пересоздаются при смене недели
+      var btn = group.querySelector("button.active:not(.wk)");
+      if (!btn){ th.style.opacity = "0"; group._last = null; return; }
+      th.style.opacity = "";
+      var to = geom(btn), from = group._last, same = btn === group._lastBtn;
+      group._last = to; group._lastBtn = btn;
+      if (snap || still || !from || same || !th.animate){ place(th, to); return; }
+      // перетекание: передний край убегает вперёд, задний догоняет; при посадке — сплющивание и дрожь
+      var dir = to.l > from.l ? 1 : -1, dist = Math.abs(to.l - from.l);
+      var lead = Math.min(dist * 0.35, 40), fR = from.l + from.w, tR = to.l + to.w;
+      function kf(l, w, sx, sy, off){ return { left: l + "px", width: w + "px", top: to.t + "px", height: to.h + "px", transform: "scale(" + sx + "," + sy + ")", offset: off, easing: "cubic-bezier(.35,0,.35,1)" }; }
+      var midL = dir > 0 ? from.l + (to.l - from.l) * 0.35 : to.l - lead * 0.2;
+      var midR = dir > 0 ? tR + lead * 0.2 : fR + (tR - fR) * 0.35;
+      th.getAnimations && th.getAnimations().forEach(function(a){ if (a.id === "glide") a.cancel(); });
+      var anim = th.animate([
+        kf(from.l, from.w, 1, 1, 0),
+        kf(midL, Math.max(midR - midL, to.w), 1, 0.84, 0.42),            // растянулась в полёте
+        kf(to.l - to.w * 0.05 + dir * 2, to.w * 1.1, 1, 0.9, 0.66),        // шлёпнулась — шире и ниже
+        kf(to.l + to.w * 0.02, to.w * 0.96, 1, 1.05, 0.82),                // отскок
+        kf(to.l, to.w, 1, 1, 1)
+      ], { duration: 600, easing: "linear" });
+      anim.id = "glide";
+      place(th, to);
+    }
+    groups.forEach(function(group){
+      if (!group) return;
+      group.classList.add("glassy");
+      var th = document.createElement("span");
+      th.className = "gthumb";
+      th.setAttribute("aria-hidden", "true");
+      group._thumb = th;
+      group.insertBefore(th, group.firstChild);
+      update(group, true);
+      var pending = false;
+      new MutationObserver(function(){
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function(){ pending = false; update(group, false); });
+      }).observe(group, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+      // линза: пока палец/кнопка мыши на группе — капля раздувается в прозрачное стекло
+      if (!still){
+        group.addEventListener("pointerdown", function(e){
+          var b = e.target.closest("button");
+          if (b && !b.classList.contains("wk") && !b.disabled) th.classList.add("lens");
+        });
+        ["pointerup", "pointercancel", "pointerleave"].forEach(function(ev){
+          group.addEventListener(ev, function(){ th.classList.remove("lens"); });
+        });
+      }
+    });
+    function resnap(){ groups.forEach(function(g){ if (g){ g._last = null; update(g, true); } }); }
+    window.addEventListener("resize", resnap);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resnap);
+  })();
 
   var calToggleBtn = document.getElementById("calToggle");
   var calBody = document.getElementById("calBody");
