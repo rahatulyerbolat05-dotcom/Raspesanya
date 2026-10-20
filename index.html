@@ -409,15 +409,22 @@
 
   <div class="foot">
     Стабильное расписание от 25.09.2026. Пары с меткой «только числ./знам.» идут через неделю.<br>
-    Расписание редактируется в одном файле — schedule-data.js.
+    Расписание редактируется в одном файле — schedule-data.js.<br>
+    <span id="dataStamp"></span>
   </div>
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-10-01h"></script>
+<script src="schedule-data.js?v=2026-10-20a"></script>
 <script>
 (function(){
   "use strict";
+
+  // Файл с данными не загрузился (нет сети, битый кэш, опечатка в нём) — вместо белого экрана говорим об этом
+  if (typeof SCHEDULE === "undefined" || typeof WEEK_ANCHOR === "undefined"){
+    document.getElementById("dayList").innerHTML = '<div class="empty">Не удалось загрузить расписание. <a href="" onclick="location.reload();return false">Обновить страницу</a></div>';
+    return;
+  }
 
   var DAY_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб"];
 
@@ -456,7 +463,7 @@
   // Замена дня: разовое событие (OVERRIDES) или период без пар (PERIODS: практика, сессия, каникулы)
   function overrideFor(d){
     var key = dateKey(d);
-    if (OVERRIDES[key]) return OVERRIDES[key];
+    if (typeof OVERRIDES !== "undefined" && OVERRIDES[key]) return OVERRIDES[key];
     if (typeof PERIODS !== "undefined"){
       for (var i=0;i<PERIODS.length;i++){ if (key >= PERIODS[i].from && key <= PERIODS[i].to) return PERIODS[i]; }
     }
@@ -504,6 +511,21 @@
 
   var state = { weekOverride:"auto", selectedDate:null, calMonth:null, calOpen:false, followToday:true };
   function effectiveWeekType(date){ return state.weekOverride === "auto" ? weekType(date) : state.weekOverride; }
+  function setWeekOverride(v){
+    state.weekOverride = v;
+    Array.prototype.forEach.call(document.querySelectorAll("#weekSeg button"), function(b){
+      b.classList.toggle("active", b.getAttribute("data-w") === v);
+    });
+  }
+  function mondayKey(d){ return dateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay()+6)%7)); }
+  // Единственное место, где меняется выбранный день. Ручной переключатель Числ./Знам. нужен, чтобы
+  // посмотреть ДРУГУЮ неделю на том же месте, — при уходе на другую неделю он сбрасывается в «Авто»
+  // (раньше «залипал»: листаешь недели, а числитель/знаменатель не чередуется).
+  function selectDate(d, follow){
+    if (state.selectedDate && mondayKey(d) !== mondayKey(state.selectedDate)) setWeekOverride("auto");
+    state.selectedDate = d;
+    state.followToday = !!follow;
+  }
   function sameDate(a,b){ return a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
   function atMidnight(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
   function inCalendarRange(d){ return d >= CALENDAR_MIN && d <= CALENDAR_MAX; }
@@ -533,7 +555,8 @@
     var pill = document.getElementById("weekPill");
     var txt = document.getElementById("weekPillText");
     pill.className = "pill " + wt;
-    txt.textContent = (wt === "num" ? "Числительная неделя" : "Знаменательная неделя");
+    // если выбранный тип не совпадает с настоящим для этой даты — честно пишем, что это ручной просмотр
+    txt.textContent = (wt === "num" ? "Числительная неделя" : "Знаменательная неделя") + (wt !== weekType(selDate) ? " · вручную" : "");
   }
   function buildDayTabs(now, selDate){
     var wrap = document.getElementById("dayTabs");
@@ -552,8 +575,7 @@
       a.addEventListener("click", function(){
         var d = weekTarget(state.selectedDate, dir);
         if (!d) return;
-        state.selectedDate = d;
-        state.followToday = false;
+        selectDate(d);
         renderAll();
       });
       return a;
@@ -570,8 +592,7 @@
           var b = document.createElement("button");
           b.innerHTML = DAY_SHORT[i] + '<span class="n">' + d.getDate() + '</span>';
           b.addEventListener("click", function(){
-            state.selectedDate = d;
-            state.followToday = false;
+            selectDate(d);
             renderAll();
           });
           wrap.appendChild(b);
@@ -737,7 +758,12 @@
     var list = idx <= 5 ? dayInfo(idx, wt) : [];
     var grid = idx === 5 ? SAT_PAIRS : PAIRS;
     var note = idx <= 5 ? (SCHEDULE[idx] && SCHEDULE[idx].note) : null;
-    if (note && !override){ noteEl.hidden = false; noteEl.innerHTML = '<span class="tag">Важно</span><span>' + note + '</span>'; } else { noteEl.hidden = true; }
+    var hasSplit = idx <= 5 && !!SCHEDULE[idx] && SCHEDULE[idx].pairs.some(function(p){ return p.split; });
+    if (note && !override){ noteEl.hidden = false; noteEl.innerHTML = '<span class="tag">Важно</span><span>' + note + '</span>'; }
+    else if (!override && list.length && !hasSplit && state.weekOverride !== "auto"){
+      // ручной Числ./Знам. на дне без разделённых пар: список не изменится — объясняем, чтобы не казалось, что кнопка сломана
+      noteEl.hidden = false; noteEl.innerHTML = '<span class="tag">Недели</span><span>В этот день пары одинаковые на числителе и знаменателе.</span>';
+    } else { noteEl.hidden = true; }
 
     if (override){
       var row2 = document.createElement("div");
@@ -762,7 +788,9 @@
       wrap.appendChild(an);
     }
 
-    var isToday = sameDate(selDate, now);
+    // «Идёт сейчас» (подсветка, вода, перемена) — только если смотрим настоящую неделю: при ручном
+    // Числ./Знам. список «понарошку», и подсвечивать в нём пару, которой сейчас нет, нельзя
+    var isToday = sameDate(selDate, now) && wt === weekType(now);
     var nowMin = now.getHours()*60+now.getMinutes();
 
     var prevP = null;
@@ -935,8 +963,7 @@
         btn.innerHTML = String(day) + (hasEvent ? '<span class="evd"></span>' : '');
         if (!disabled){
           btn.addEventListener("click", function(){
-            state.selectedDate = d;
-            state.followToday = false;
+            selectDate(d);
             state.calOpen = false;
             document.getElementById("calBody").classList.remove("open");
             document.getElementById("calToggle").classList.remove("open");
@@ -975,8 +1002,7 @@
   document.getElementById("annStrip").addEventListener("click", function(e){
     var b = e.target.closest("[data-date]"); if (!b) return;
     var p = b.getAttribute("data-date").split("-").map(Number);
-    state.selectedDate = new Date(p[0], p[1]-1, p[2]);
-    state.followToday = false;
+    selectDate(new Date(p[0], p[1]-1, p[2]));
     renderAll();
   });
 
@@ -986,9 +1012,8 @@
     // держим selectedDate синхронным с реальной датой. Раньше день выбирался
     // один раз и "залипал", если оставить вкладку открытой через полночь.
     if (state.selectedDate === null || state.followToday){
-      state.selectedDate = atMidnight(now);
       // в воскресенье пар нет, а во вкладках только Пн–Сб — сразу показываем понедельник
-      if (now.getDay() === 0) state.selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      selectDate(now.getDay() === 0 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) : atMidnight(now), true);
     }
     if (state.calMonth === null) state.calMonth = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
     var selDate = state.selectedDate;
@@ -1010,9 +1035,7 @@
   document.getElementById("weekSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button");
     if (!btn) return;
-    Array.prototype.forEach.call(this.querySelectorAll("button"), function(b){ b.classList.remove("active"); });
-    btn.classList.add("active");
-    state.weekOverride = btn.getAttribute("data-w");
+    setWeekOverride(btn.getAttribute("data-w"));
     renderAll();
   });
 
@@ -1081,6 +1104,14 @@
       anim.onfinish = function(){ group._gliding = false; land(group, btn); };
       anim.oncancel = function(){ if (group._lastBtn === btn) group._gliding = false; };
       place(th, to);
+      // страховка: если кадры тормозят (фоновая вкладка, экономия энергии) и анимация не долетела —
+      // обрываем её и сажаем каплю сразу, чтобы выбранная кнопка всегда выглядела выбранной
+      setTimeout(function(){
+        if (!group._gliding || group._lastBtn !== btn) return;
+        try { anim.cancel(); } catch(e){}
+        group._gliding = false;
+        land(group, btn);
+      }, 900);
     }
     // посадка: капля уходит под кнопку, текст кнопки становится «на капле»
     function land(group, btn){
@@ -1101,7 +1132,11 @@
       new MutationObserver(function(){
         if (pending) return;
         pending = true;
-        requestAnimationFrame(function(){ pending = false; update(group, false); });
+        // rAF — чтобы обновиться в кадре; таймер — запасной путь, если rAF стоит (капля не должна отставать от кнопки)
+        var done = false;
+        function run(){ if (done) return; done = true; pending = false; update(group, false); }
+        requestAnimationFrame(run);
+        setTimeout(run, 120);
       }).observe(group, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
       // линза: пока палец/кнопка мыши на группе — капля раздувается в прозрачное стекло
       if (!still){
@@ -1158,16 +1193,21 @@
   document.getElementById("calPrev").addEventListener("click", function(){ navMonth(-1); });
   document.getElementById("calNext").addEventListener("click", function(){ navMonth(1); });
   document.getElementById("calTodayBtn").addEventListener("click", function(){
-    state.selectedDate = atMidnight(new Date());
-    state.followToday = true;
+    selectDate(atMidnight(new Date()), true);
     state.calOpen = false;
     calBody.classList.remove("open");
     calToggleBtn.classList.remove("open");
     renderAll();
   });
 
+  var dataStamp = document.getElementById("dataStamp");
+  if (dataStamp && typeof DATA_UPDATED !== "undefined") dataStamp.textContent = "Данные обновлены " + DATA_UPDATED.split("-").reverse().join(".");
+
   renderAll();
   setInterval(renderAll, 15000);
+  // вкладка вернулась из фона (телефоны замораживают таймеры) или страница восстановлена из кэша — обновляем сразу
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) renderAll(); });
+  window.addEventListener("pageshow", function(e){ if (e.persisted) renderAll(); });
 })();
 </script>
 

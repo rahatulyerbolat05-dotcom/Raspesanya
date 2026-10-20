@@ -20,6 +20,10 @@
 // только если куратор объявит, что где-то сбой в чередовании.
 var WEEK_ANCHOR = "2026-09-07";
 
+// Дата последней правки этого файла (YYYY-MM-DD) — показывается внизу страницы, по ней видно, что телефон
+// взял свежие данные. После КАЖДОЙ правки меняй её и ?v=... у <script src="schedule-data.js"> в index.html.
+var DATA_UPDATED = "2026-10-20";
+
 function P(pair, name, teacher, room) {
   return { pair: pair, name: name, teacher: teacher, room: room || "413" };
 }
