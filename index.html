@@ -415,7 +415,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-11-11"></script>
+<script src="schedule-data.js?v=2026-11-16"></script>
 <script>
 (function(){
   "use strict";
@@ -449,7 +449,7 @@
   var COLORS = {
     "РО 1.1":"#E5484D", "РО 1.2":"#F0662A", "РО 1.3":"#F5920B", "РО 1.4":"#D9A400",
     "РО 1.5":"#9BBE2A", "РО 1.6":"#30A46C", "РО 1.7":"#12A594", "РО 3.5":"#0BA5D9",
-    "ООМ 1":"#3B82F6", "ООМ 2":"#4F5FD9", "Факультатив: проф. казахский":"#7A55D6",
+    "ООМ 1":"#3B82F6", "ООМ 2":"#4F5FD9", "Учебная практика":"#12A594", "Факультатив: проф. казахский":"#7A55D6",
     "Факультатив: проф. иностранный":"#A54DC9"
   };
   function colorFor(code){
@@ -478,7 +478,7 @@
       var x = new Date(d.getFullYear(), d.getMonth(), d.getDate()+i);
       var ix = (x.getDay()+6)%7;
       if (ix > 5 || overrideFor(x)) continue;
-      if (dayInfo(ix, weekType(x)).length) return x;
+      if (dayInfo(ix, weekType(x), x).length) return x;
     }
     return null;
   }
@@ -534,13 +534,25 @@
     if (p.split) return wt === "num" ? p.num : p.denom;
     return p;
   }
-  function dayInfo(idx, wt){
-    var d = SCHEDULE[idx];
+  // Своё расписание на период (практика и т.п.): SCHEDULE_PERIODS в schedule-data.js.
+  // Вне этих периодов — обычное SCHEDULE.
+  function scheduleFor(date){
+    if (date && typeof SCHEDULE_PERIODS !== "undefined"){
+      var key = dateKey(date);
+      for (var i=0;i<SCHEDULE_PERIODS.length;i++){
+        var sp = SCHEDULE_PERIODS[i];
+        if (key >= sp.from && key <= sp.to) return sp.schedule;
+      }
+    }
+    return SCHEDULE;
+  }
+  function dayInfo(idx, wt, date){
+    var d = scheduleFor(date)[idx];
     if (!d) return [];
     return d.pairs.map(function(p){ return resolvePair(p, wt); }).filter(Boolean);
   }
-  function isSplitPair(idx, pairNum){
-    var d = SCHEDULE[idx];
+  function isSplitPair(idx, pairNum, date){
+    var d = scheduleFor(date)[idx];
     if (!d) return false;
     var found = d.pairs.filter(function(p){ return p.pair === pairNum; })[0];
     return !!(found && found.split);
@@ -623,8 +635,8 @@
     // ключ легенды — код предмета из COLORS; порядок — как в COLORS, то есть по радуге
     var SHORT = {"Факультатив: проф. казахский":"Каз. яз", "Факультатив: проф. иностранный":"Ин. яз"};
     var keys = Object.keys(COLORS), used = {};
-    Object.keys(SCHEDULE).forEach(function(k){
-      dayInfo(k, wt).forEach(function(c){
+    Object.keys(scheduleFor(selDate)).forEach(function(k){
+      dayInfo(k, wt, selDate).forEach(function(c){
         for (var i=0;i<keys.length;i++){ if (c.name.indexOf(keys[i]) === 0){ used[keys[i]] = true; break; } }
       });
     });
@@ -646,7 +658,7 @@
     if (idx > 5) return {kind:"weekend"};
     // «Сейчас» всегда по реальной неделе: ручной переключатель Числ./Знам. — только для просмотра
     var wt = weekType(now);
-    var list = dayInfo(idx, wt);
+    var list = dayInfo(idx, wt, now);
     if (!list.length) return {kind:"empty", dayIdx:idx};
     var grid = idx === 5 ? SAT_PAIRS : PAIRS;
     var nowMin = now.getHours()*60 + now.getMinutes();
@@ -755,10 +767,11 @@
       return;
     }
 
-    var list = idx <= 5 ? dayInfo(idx, wt) : [];
+    var sched = scheduleFor(selDate);
+    var list = idx <= 5 ? dayInfo(idx, wt, selDate) : [];
     var grid = idx === 5 ? SAT_PAIRS : PAIRS;
-    var note = idx <= 5 ? (SCHEDULE[idx] && SCHEDULE[idx].note) : null;
-    var hasSplit = idx <= 5 && !!SCHEDULE[idx] && SCHEDULE[idx].pairs.some(function(p){ return p.split; });
+    var note = idx <= 5 ? (sched[idx] && sched[idx].note) : null;
+    var hasSplit = idx <= 5 && !!sched[idx] && sched[idx].pairs.some(function(p){ return p.split; });
     if (note && !override){ noteEl.hidden = false; noteEl.innerHTML = '<span class="tag">Важно</span><span>' + note + '</span>'; }
     else if (!override && list.length && !hasSplit && state.weekOverride !== "auto"){
       // ручной Числ./Знам. на дне без разделённых пар: список не изменится — объясняем, чтобы не казалось, что кнопка сломана
@@ -811,7 +824,7 @@
       row.className = "row";
       var isNowActive = isToday && p && nowMin >= toMinutes(p.start) && nowMin < toMinutes(p.end);
       if (isNowActive) row.classList.add("active");
-      var splitTag = isSplitPair(idx, c.pair) ? '<span class="splitTag">'+(wt === "num" ? "только числ." : "только знам.")+'</span>' : '';
+      var splitTag = isSplitPair(idx, c.pair, selDate) ? '<span class="splitTag">'+(wt === "num" ? "только числ." : "только знам.")+'</span>' : '';
       row.innerHTML =
         '<div class="time">'+ (p? p.start : "?") +'<b>'+ (p? p.end : "") +'</b></div>' +
         '<div class="stripe" style="background:'+colorFor(c.name)+'"></div>' +
