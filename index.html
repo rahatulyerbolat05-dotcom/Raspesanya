@@ -415,7 +415,7 @@
 </div>
 
 <!-- ?v= — меняй при каждом обновлении schedule-data.js, чтобы телефоны не брали старую копию из кэша -->
-<script src="schedule-data.js?v=2026-11-25"></script>
+<script src="schedule-data.js?v=2026-11-25-auto1"></script>
 <script>
 (function(){
   "use strict";
@@ -1216,7 +1216,36 @@
   var dataStamp = document.getElementById("dataStamp");
   if (dataStamp && typeof DATA_UPDATED !== "undefined") dataStamp.textContent = "Данные обновлены " + DATA_UPDATED.split("-").reverse().join(".");
 
+  // Проверяем данные независимо от кэша HTML, не сбрасывая выбранный день.
+  var refreshBusy = false;
+  function refreshSchedule(){
+    if (refreshBusy || document.hidden || !navigator.onLine) return;
+    refreshBusy = true;
+    var script = document.createElement("script");
+    script.src = "schedule-data.js?fresh=" + Date.now();
+    function finish(){
+      script.remove();
+      refreshBusy = false;
+    }
+    script.onload = function(){
+      if (typeof WEEK_ANCHOR !== "undefined"){
+        var parts = WEEK_ANCHOR.split("-").map(Number);
+        ANCHOR = Date.UTC(parts[0], parts[1]-1, parts[2]);
+      }
+      if (dataStamp && typeof DATA_UPDATED !== "undefined")
+        dataStamp.textContent = "Данные обновлены " + DATA_UPDATED.split("-").reverse().join(".");
+      finish();
+      renderAll();
+    };
+    script.onerror = finish;
+    document.head.appendChild(script);
+  }
   renderAll();
+  refreshSchedule();
+  setInterval(refreshSchedule, 60000);
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) refreshSchedule(); });
+  window.addEventListener("pageshow", refreshSchedule);
+  window.addEventListener("online", refreshSchedule);
   setInterval(renderAll, 15000);
   // вкладка вернулась из фона (телефоны замораживают таймеры) или страница восстановлена из кэша — обновляем сразу
   document.addEventListener("visibilitychange", function(){ if (!document.hidden) renderAll(); });
